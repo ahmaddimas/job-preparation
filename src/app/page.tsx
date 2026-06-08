@@ -1,15 +1,9 @@
 "use client";
 
 import { FormEvent, useMemo, useState, useEffect } from "react";
-import type { JobAnalysis } from "@/lib/schema";
-
-export type AiProvider = "google" | "openai" | "anthropic" | "groq" | "openrouter";
-
-export type AiConfig = {
-  provider: AiProvider;
-  model: string;
-  apiKey: string;
-};
+import { Card } from "@/components/Card";
+import { useJobAnalysis } from "@/hooks/useJobAnalysis";
+import type { AiProvider, AiConfig } from "@/lib/analyze";
 
 const DEFAULT_CONFIG: AiConfig = {
   provider: "google",
@@ -27,15 +21,10 @@ export default function Home() {
   const [inputMode, setInputMode] = useState<"url" | "text">("url");
   const [jobUrl, setJobUrl] = useState("");
   const [jobText, setJobText] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<JobAnalysis | null>(null);
-  const [checkedSkills, setCheckedSkills] = useState<Record<string, boolean>>(
-    {}
-  );
-  const [expandedResources, setExpandedResources] = useState<
-    Record<string, boolean>
-  >({});
+  const [checkedSkills, setCheckedSkills] = useState<Record<string, boolean>>({});
+  const [expandedResources, setExpandedResources] = useState<Record<string, boolean>>({});
+
+  const { result, loading, error, analyze } = useJobAnalysis();
 
   /* ── load/save settings ── */
   useEffect(() => {
@@ -92,61 +81,25 @@ export default function Home() {
     event.preventDefault();
 
     if (!aiConfig.apiKey.trim()) {
-      setError("Please configure your AI API Key in the Settings first.");
       setIsSettingsOpen(true);
       return;
     }
 
-    const payload =
-      inputMode === "url"
-        ? { url: jobUrl.trim(), aiConfig }
-        : { text: jobText.trim(), aiConfig };
-
     const isEmpty = inputMode === "url" ? !jobUrl.trim() : !jobText.trim();
-    if (isEmpty) {
-      setError(
-        inputMode === "url"
-          ? "Please enter a job URL."
-          : "Please paste the job description."
-      );
-      return;
-    }
+    if (isEmpty) return;
 
-    setLoading(true);
-    setError(null);
+    const input =
+      inputMode === "url"
+        ? { url: jobUrl.trim() }
+        : { text: jobText.trim() };
 
-    try {
-      const response = await fetch("/api/analyze-job", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+    await analyze(input, aiConfig);
 
-      const data = (await response.json()) as JobAnalysis & {
-        error?: string;
-      };
-
-      if (!response.ok) {
-        throw new Error(data.error ?? "Failed to analyze job posting");
-      }
-
-      setResult(data);
+    if (result) {
       setCheckedSkills(
-        Object.fromEntries(
-          (data.skills ?? []).map((s) => [s.name, false])
-        )
+        Object.fromEntries((result.skills ?? []).map((s) => [s.name, false]))
       );
       setExpandedResources({});
-    } catch (submitError) {
-      setResult(null);
-      setCheckedSkills({});
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Something went wrong while analyzing."
-      );
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -221,29 +174,6 @@ export default function Home() {
       <span className="text-xs text-slate-400">
         {done}/{skills.length}
       </span>
-    );
-  }
-
-  /* ── card wrapper with stagger ── */
-  function Card({
-    children,
-    delay = 0,
-    className = "",
-    id,
-  }: {
-    children: React.ReactNode;
-    delay?: number;
-    className?: string;
-    id: string;
-  }) {
-    return (
-      <article
-        id={id}
-        className={`animate-slide-up rounded-2xl border border-slate-800 bg-slate-900 p-5 ${className}`}
-        style={{ animationDelay: `${delay}ms` }}
-      >
-        {children}
-      </article>
     );
   }
 

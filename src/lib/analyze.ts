@@ -1,4 +1,5 @@
 import { generateObject } from "ai";
+import type { LanguageModel } from "ai";
 
 import { jobAnalysisSchema, type JobAnalysis } from "./schema";
 
@@ -21,10 +22,42 @@ Your task: Given a job posting text, extract and analyze ALL relevant informatio
 8. **Be direct**: No fluff, no padding. Every word should be useful.
 9. **Infer when necessary**: If the posting is vague about certain fields (like company name), use "Not specified" rather than guessing.`;
 
+export type AiProvider = "google" | "openai" | "anthropic" | "groq" | "openrouter";
+
 export type AiConfig = {
-  provider: "google" | "openai" | "anthropic" | "groq" | "openrouter";
+  provider: AiProvider;
   model: string;
   apiKey: string;
+};
+
+/**
+ * Strategy pattern: each provider is a factory function that receives
+ * an apiKey and modelId and returns a LanguageModel instance.
+ * Adding a new provider only requires adding an entry here.
+ */
+type ModelFactory = (apiKey: string, model: string) => Promise<LanguageModel>;
+
+const providerStrategies: Record<AiProvider, ModelFactory> = {
+  google: async (apiKey, model) => {
+    const { createGoogleGenerativeAI } = await import("@ai-sdk/google");
+    return createGoogleGenerativeAI({ apiKey })(model);
+  },
+  openai: async (apiKey, model) => {
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    return createOpenAI({ apiKey })(model);
+  },
+  anthropic: async (apiKey, model) => {
+    const { createAnthropic } = await import("@ai-sdk/anthropic");
+    return createAnthropic({ apiKey })(model);
+  },
+  groq: async (apiKey, model) => {
+    const { createGroq } = await import("@ai-sdk/groq");
+    return createGroq({ apiKey })(model);
+  },
+  openrouter: async (apiKey, model) => {
+    const { createOpenRouter } = await import("@openrouter/ai-sdk-provider");
+    return createOpenRouter({ apiKey })(model);
+  },
 };
 
 /**
@@ -34,33 +67,8 @@ export async function analyzeWithAI(
   jobText: string,
   config: AiConfig
 ): Promise<JobAnalysis> {
-  let aiModel;
-
-  switch (config.provider) {
-    case "openai":
-      const { createOpenAI } = await import("@ai-sdk/openai");
-      aiModel = createOpenAI({ apiKey: config.apiKey })(config.model);
-      break;
-    case "anthropic":
-      const { createAnthropic } = await import("@ai-sdk/anthropic");
-      aiModel = createAnthropic({ apiKey: config.apiKey })(config.model);
-      break;
-    case "groq":
-      const { createGroq } = await import("@ai-sdk/groq");
-      aiModel = createGroq({ apiKey: config.apiKey })(config.model);
-      break;
-    case "openrouter":
-      const { createOpenRouter } = await import("@openrouter/ai-sdk-provider");
-      aiModel = createOpenRouter({ apiKey: config.apiKey })(config.model);
-      break;
-    case "google":
-    default:
-      const { createGoogleGenerativeAI } = await import("@ai-sdk/google");
-      aiModel = createGoogleGenerativeAI({ apiKey: config.apiKey })(
-        config.model
-      );
-      break;
-  }
+  const strategy = providerStrategies[config.provider] ?? providerStrategies.google;
+  const aiModel = await strategy(config.apiKey, config.model);
 
   const { object } = await generateObject({
     model: aiModel,
