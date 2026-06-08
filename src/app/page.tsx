@@ -13,9 +13,17 @@ const DEFAULT_CONFIG: AiConfig = {
 
 export default function Home() {
   /* ── ai settings state ── */
-  const [aiConfig, setAiConfig] = useState<AiConfig>(DEFAULT_CONFIG);
+  const [aiConfig, setAiConfig] = useState<AiConfig>(() => {
+    if (typeof window === "undefined") return DEFAULT_CONFIG;
+    try {
+      const saved = localStorage.getItem("job-prep-ai-config");
+      return saved ? (JSON.parse(saved) as AiConfig) : DEFAULT_CONFIG;
+    } catch {
+      return DEFAULT_CONFIG;
+    }
+  });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isConfigLoaded, setIsConfigLoaded] = useState(false);
+  const isConfigLoaded = true;
 
   /* ── form state ── */
   const [inputMode, setInputMode] = useState<"url" | "text">("url");
@@ -27,18 +35,6 @@ export default function Home() {
   const { result, loading, error, analyze } = useJobAnalysis();
 
   /* ── load/save settings ── */
-  useEffect(() => {
-    const saved = localStorage.getItem("job-prep-ai-config");
-    if (saved) {
-      try {
-        setAiConfig(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to parse saved config", e);
-      }
-    }
-    setIsConfigLoaded(true);
-  }, []);
-
   useEffect(() => {
     if (isConfigLoaded) {
       localStorage.setItem("job-prep-ai-config", JSON.stringify(aiConfig));
