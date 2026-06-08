@@ -160,78 +160,9 @@ export async function POST(request: Request) {
     }
 
     const truncated = truncateForAI(jobText);
-    logger.info("input.truncated", { requestId, originalChars: jobText.length, truncatedChars: truncated.length });
+    const stream = await analyzeWithAI(truncated, body.aiConfig);
 
-    logger.info("ai.stream.start", { requestId, provider: body.aiConfig.provider, model: body.aiConfig.model });
-
-    const { value: stream, durationMs: aiInitMs } = await timed(
-      "ai.init",
-      () => analyzeWithAI(truncated, body.aiConfig!),
-      { requestId }
-    );
-
-    const totalMs = Math.round(performance.now() - totalStart);
-    logger.info("ai.stream.ready", { requestId, aiInitMs, totalMsBeforeStream: totalMs });
-
-    // Stream partial objects as NDJSON with server-side batching.
-    // First chunk flushed immediately for low TTFB; subsequent chunks
-    // batched at BATCH_MS intervals (some models emit 1000+ granular partials).
-    const { readable, writable } = new TransformStream();
-    const writer = writable.getWriter();
-    const encoder = new TextEncoder();
-
-    let chunkCount = 0;
-    let latestPartial: Record<string, unknown> | null = null;
-    const BATCH_MS = 300;
-    (async () => {
-      try {
-        logger.info("stream.pipe.start", { requestId });
-        let lastBatchTime = performance.now();
-        let isFirst = true;
-
-        for await (const partial of stream.partialObjectStream) {
-          chunkCount++;
-          const now = performance.now();
-          latestPartial = partial;
-
-          if (isFirst) {
-            isFirst = false;
-            const firstChunkMs = Math.round(now - totalStart);
-            logger.info("stream.first_chunk", { requestId, keys: Object.keys(partial), firstChunkMs });
-            await writer.write(encoder.encode(JSON.stringify(partial) + "\n"));
-            lastBatchTime = now;
-          } else if (chunkCount % 100 === 0) {
-            logger.info("stream.progress", { requestId, chunkCount });
-          } else if (now - lastBatchTime >= BATCH_MS) {
-            lastBatchTime = now;
-            await writer.write(encoder.encode(JSON.stringify(partial) + "\n"));
-          }
-        }
-
-        const streamDoneMs = Math.round(performance.now() - totalStart);
-        logger.info("stream.pipe.done", { requestId, chunkCount, streamDoneMs });
-        if (chunkCount === 0) {
-          logger.warn("stream.no_chunks", { requestId, model: body.aiConfig?.model, note: "Model may not support structured output / JSON schema mode" });
-        }
-        // Always flush the final complete state
-        if (latestPartial) {
-          await writer.write(encoder.encode(JSON.stringify(latestPartial) + "\n"));
-        }
-        await writer.write(encoder.encode(JSON.stringify({ __type: "stream_complete" }) + "\n"));
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        logger.error("stream.pipe.error", { requestId, chunkCount, error: errorMsg });
-        try {
-          await writer.write(encoder.encode(JSON.stringify({ __type: "stream_error", error: errorMsg }) + "\n"));
-        } catch { /* ignore write errors during error handling */ }
-      } finally {
-        try { await writer.close(); } catch { /* ignore close errors */ }
-      }
-    })();
-
-    return new Response(readable, {
-      headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },
-    });
+    return stream.toTextStreamResponse();
   } catch (err) {
     const totalMs = Math.round(performance.now() - totalStart);
     const message = err instanceof Error ? err.message : "Something went wrong while analyzing the job posting.";

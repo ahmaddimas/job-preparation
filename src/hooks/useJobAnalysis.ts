@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { jobAnalysisSchema } from "@/lib/schema";
+import { parsePartialJson } from "ai";
 import type { JobAnalysis } from "@/lib/schema";
 import type { AiConfig } from "@/lib/analyze";
 
@@ -59,55 +59,31 @@ export function useJobAnalysis(): UseJobAnalysisReturn {
       if (!reader) throw new Error("No response body");
 
       const decoder = new TextDecoder();
-      let buffer = "";
-      let finalResult: Partial<JobAnalysis> | null = null;
+      let accumulated = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
+        accumulated += decoder.decode(value, { stream: true });
 
-        const lines = buffer.split("\n");
-        buffer = lines.pop()!;
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          try {
-            const parsed = JSON.parse(trimmed);
-
-            if (parsed.__type === "stream_complete") continue;
-            if (parsed.__type === "stream_error") {
-              throw new Error(parsed.error || "Stream processing failed on server");
-            }
-
-            const partial = parsed as Partial<JobAnalysis>;
-            finalResult = partial;
-            throttledSetState(partial);
-          } catch (e) {
-            if (!(e instanceof SyntaxError)) throw e;
-          }
+        // parsePartialJson tolerates incomplete JSON from the stream
+        const { value: partial, state: parseState } = parsePartialJson(accumulated);
+        if (parseState !== "failed" && partial) {
+          setState((prev) => ({ ...prev, result: partial as Partial<JobAnalysis> }));
         }
       }
 
-      if (finalResult) {
-        const parsed = jobAnalysisSchema.safeParse(finalResult);
-        if (parsed.success) {
-          parsed.data.learningResources?.sort((a, b) => a.roadmapOrder - b.roadmapOrder);
-          setState({ result: parsed.data, loading: false, error: null });
-          return parsed.data;
-        }
+      // Final parse on complete response
+      const { value: final } = parsePartialJson(accumulated);
+      if (final) {
+        const finalResult = final as JobAnalysis;
+        // Sort learning resources by roadmap order
+        finalResult.learningResources?.sort((a, b) => a.roadmapOrder - b.roadmapOrder);
         setState({ result: finalResult, loading: false, error: null });
-        return finalResult;
+      } else {
+        setState((prev) => ({ ...prev, loading: false }));
       }
-
-      setState({
-        result: null,
-        loading: false,
-        error: "The selected model didn't return usable output. It may not support structured JSON responses. Try a different model.",
-      });
-      return null;
     } catch (err) {
       setState({
         result: null,

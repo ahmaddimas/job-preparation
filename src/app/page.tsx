@@ -465,8 +465,8 @@ export default function Home() {
                 Tech Stack
               </h2>
               <div className="mt-3 space-y-4">
-                {(Array.isArray(result.techStack) ? result.techStack : []).map((group, gi) => (
-                  <div key={group.category || `tc-${gi}`}>
+                {(result.techStack ?? []).map((group) => (
+                  <div key={group.category}>
                     <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                       {group.category}
                     </h4>
@@ -559,8 +559,8 @@ export default function Home() {
                 Requirements
               </h2>
               <ul className="mt-3 space-y-2 text-sm text-slate-300">
-                {(Array.isArray(result.requirements) ? result.requirements : []).length > 0 ? (
-                  (Array.isArray(result.requirements) ? result.requirements : []).map((req, i) => (
+                {(result.requirements ?? []).length > 0 ? (
+                  (result.requirements ?? []).map((req, i) => (
                     <li key={i} className="flex items-start gap-1">
                       {reqTypeBadge(req.type)}
                       <span>{req.text}</span>
@@ -580,8 +580,8 @@ export default function Home() {
                 Responsibilities
               </h2>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-300">
-                {(Array.isArray(result.responsibilities) ? result.responsibilities : []).length > 0 ? (
-                  (Array.isArray(result.responsibilities) ? result.responsibilities : []).map((item, i) => (
+                {(result.responsibilities ?? []).length > 0 ? (
+                  (result.responsibilities ?? []).map((item, i) => (
                     <li key={i}>{item}</li>
                   ))
                 ) : (
@@ -596,8 +596,8 @@ export default function Home() {
             <Card id="card-benefits" delay={480}>
               <h2 className="text-lg font-semibold text-cyan-300">Benefits</h2>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-300">
-                {(Array.isArray(result.benefits) ? result.benefits : []).length > 0 ? (
-                  (Array.isArray(result.benefits) ? result.benefits : []).map((item, i) => <li key={i}>{item}</li>)
+                {(result.benefits ?? []).length > 0 ? (
+                  (result.benefits ?? []).map((item, i) => <li key={i}>{item}</li>)
                 ) : (
                   <li className="text-slate-500">
                     No benefits section found.
@@ -607,7 +607,7 @@ export default function Home() {
             </Card>
 
             {/* 8 ── Red Flags (conditional) */}
-            {(Array.isArray(result.redFlags) ? result.redFlags : []).length > 0 && (
+            {(result.redFlags ?? []).length > 0 && (
               <Card
                 id="card-red-flags"
                 delay={560}
@@ -617,7 +617,7 @@ export default function Home() {
                   ⚠️ Red Flags
                 </h2>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-amber-200/80">
-                  {(Array.isArray(result.redFlags) ? result.redFlags : []).map((flag, i) => (
+                  {(result.redFlags ?? []).map((flag, i) => (
                      <li key={i}>{flag}</li>
                   ))}
                 </ul>
@@ -634,8 +634,8 @@ export default function Home() {
                 Learning Resources
               </h2>
               <div className="mt-4 space-y-2">
-                {(Array.isArray(result.learningResources) ? result.learningResources : []).length > 0 ? (
-                  (Array.isArray(result.learningResources) ? result.learningResources : []).map((lr, i) => {
+                {(result.learningResources ?? []).length > 0 ? (
+                  (result.learningResources ?? []).map((lr, i) => {
                     const isOpen = expandedResources[lr.skill] ?? false;
                     return (
                       <div
@@ -734,7 +734,7 @@ export default function Home() {
                 Preparation Roadmap
               </h2>
               <div className="mt-4 space-y-5">
-                {(Array.isArray(result.preparationRoadmap) ? result.preparationRoadmap : []).map((phase, pi) => (
+                {(result.preparationRoadmap ?? []).map((phase, pi) => (
                   <div key={pi}>
                     <h3 className="flex items-center text-sm font-bold text-slate-100">
                       {phase.phase}
