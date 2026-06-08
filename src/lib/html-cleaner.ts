@@ -58,7 +58,7 @@ export function cleanHtml(html: string): string {
   text = text.replace(/<[^>]*>/g, " ");
 
   // Decode HTML entities
-  text = text.replace(ENTITY_REGEX, (match) => ENTITY_MAP[match.toLowerCase()] || match);
+  text = text.replace(ENTITY_REGEX, (match) => ENTITY_MAP[match.toLowerCase()]);
   text = text.replace(/&#(\d+);/g, (_match, code: string) =>
     String.fromCharCode(Number(code))
   );
@@ -80,11 +80,13 @@ export function cleanHtml(html: string): string {
   return text;
 }
 
+/** Default AI context limit (~12,500 tokens). */
+export const MAX_CHARS = 50_000;
+
 /**
  * Truncate text to fit within AI context limits.
- * Default max: 50,000 characters (~12,500 tokens).
  */
-export function truncateForAI(text: string, maxChars = 50_000): string {
+export function truncateForAI(text: string, maxChars = MAX_CHARS): string {
   if (text.length <= maxChars) return text;
   return text.slice(0, maxChars) + "\n\n[Content truncated]";
 }

@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState, useEffect } from "react";
 import { Card } from "@/components/Card";
 import { useJobAnalysis } from "@/hooks/useJobAnalysis";
+import { useJobHistory } from "@/hooks/useJobHistory";
 import type { AiProvider, AiConfig } from "@/lib/analyze";
 
 const DEFAULT_CONFIG: AiConfig = {
@@ -23,7 +24,6 @@ export default function Home() {
     }
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const isConfigLoaded = true;
 
   /* ── form state ── */
   const [inputMode, setInputMode] = useState<"url" | "text">("url");
@@ -32,14 +32,15 @@ export default function Home() {
   const [checkedSkills, setCheckedSkills] = useState<Record<string, boolean>>({});
   const [expandedResources, setExpandedResources] = useState<Record<string, boolean>>({});
 
-  const { result, loading, error, analyze } = useJobAnalysis();
+  const { result, loading, error, analyze, restore } = useJobAnalysis();
+  const { entries: historyEntries, addEntry: addHistoryEntry, removeEntry: removeHistoryEntry } = useJobHistory();
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
-  /* ── load/save settings ── */
+  /* ── persist settings ── */
   useEffect(() => {
-    if (isConfigLoaded) {
-      localStorage.setItem("job-prep-ai-config", JSON.stringify(aiConfig));
-    }
-  }, [aiConfig, isConfigLoaded]);
+    localStorage.setItem("job-prep-ai-config", JSON.stringify(aiConfig));
+  }, [aiConfig]);
 
   /* ── derived ── */
   const requiredSkills = useMemo(
@@ -89,11 +90,13 @@ export default function Home() {
         ? { url: jobUrl.trim() }
         : { text: jobText.trim() };
 
-    await analyze(input, aiConfig);
+    const analysisResult = await analyze(input, aiConfig);
 
-    if (result) {
+    if (analysisResult) {
+      const inputKey = inputMode === "url" ? jobUrl.trim() : jobText.trim().slice(0, 200);
+      addHistoryEntry(inputKey, analysisResult);
       setCheckedSkills(
-        Object.fromEntries((result.skills ?? []).map((s) => [s.name, false]))
+        Object.fromEntries((analysisResult.skills ?? []).map((s) => [s.name, false]))
       );
       setExpandedResources({});
     }
@@ -173,8 +176,6 @@ export default function Home() {
     );
   }
 
-  if (!isConfigLoaded) return null; // Avoid hydration mismatch
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6 md:px-10">
@@ -193,12 +194,20 @@ export default function Home() {
                 technical skills, and get an AI-powered learning roadmap.
               </p>
             </div>
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="flex items-center gap-2 rounded-lg bg-white/20 px-3 py-1.5 text-sm font-medium backdrop-blur transition hover:bg-white/30"
-            >
-              ⚙️ Settings
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsHistoryOpen(true)}
+                className="flex items-center gap-2 rounded-lg bg-white/20 px-3 py-1.5 text-sm font-medium backdrop-blur transition hover:bg-white/30"
+              >
+                📋 History
+              </button>
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="flex items-center gap-2 rounded-lg bg-white/20 px-3 py-1.5 text-sm font-medium backdrop-blur transition hover:bg-white/30"
+              >
+                ⚙️ Settings
+              </button>
+            </div>
           </div>
         </section>
 
@@ -386,7 +395,7 @@ export default function Home() {
         </section>
 
         {/* ── Skeleton Loading ── */}
-        {loading && (
+        {loading && !result?.jobTitle && (
           <section
             id="skeleton-section"
             className="grid gap-5 md:grid-cols-2"
@@ -403,7 +412,7 @@ export default function Home() {
         )}
 
         {/* ── Results ── */}
-        {result && !loading && (
+        {result && result.jobTitle && (
           <section id="results-section" className="grid gap-5 md:grid-cols-2">
             {/* 1 ── Role Overview */}
             <Card id="card-role-overview" delay={0}>
@@ -439,14 +448,14 @@ export default function Home() {
                 Candidate Profile
               </h2>
               <h3 className="mt-3 text-base font-bold text-slate-50">
-                {result.candidateProfile.seniorityLevel}{" "}
-                {result.candidateProfile.roleType}
+                {result.candidateProfile?.seniorityLevel}{" "}
+                {result.candidateProfile?.roleType}
               </h3>
               <p className="mt-2 text-sm text-slate-400">
-                {result.candidateProfile.teamContext}
+                {result.candidateProfile?.teamContext}
               </p>
               <p className="mt-3 text-sm leading-relaxed text-slate-300">
-                {result.candidateProfile.summary}
+                {result.candidateProfile?.summary}
               </p>
             </Card>
 
@@ -456,15 +465,15 @@ export default function Home() {
                 Tech Stack
               </h2>
               <div className="mt-3 space-y-4">
-                {result.techStack.map((group) => (
-                  <div key={group.category}>
+                {(Array.isArray(result.techStack) ? result.techStack : []).map((group, gi) => (
+                  <div key={group.category || `tc-${gi}`}>
                     <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
                       {group.category}
                     </h4>
                     <div className="flex flex-wrap gap-1.5">
-                      {group.technologies.map((tech) => (
+                      {(Array.isArray(group.technologies) ? group.technologies : []).map((tech, ti) => (
                         <span
-                          key={tech}
+                          key={tech || `t-${ti}`}
                           className="rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-1 text-xs font-medium text-indigo-300"
                         >
                           {tech}
@@ -550,8 +559,8 @@ export default function Home() {
                 Requirements
               </h2>
               <ul className="mt-3 space-y-2 text-sm text-slate-300">
-                {result.requirements.length > 0 ? (
-                  result.requirements.map((req, i) => (
+                {(Array.isArray(result.requirements) ? result.requirements : []).length > 0 ? (
+                  (Array.isArray(result.requirements) ? result.requirements : []).map((req, i) => (
                     <li key={i} className="flex items-start gap-1">
                       {reqTypeBadge(req.type)}
                       <span>{req.text}</span>
@@ -571,8 +580,8 @@ export default function Home() {
                 Responsibilities
               </h2>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-300">
-                {result.responsibilities.length > 0 ? (
-                  result.responsibilities.map((item, i) => (
+                {(Array.isArray(result.responsibilities) ? result.responsibilities : []).length > 0 ? (
+                  (Array.isArray(result.responsibilities) ? result.responsibilities : []).map((item, i) => (
                     <li key={i}>{item}</li>
                   ))
                 ) : (
@@ -587,8 +596,8 @@ export default function Home() {
             <Card id="card-benefits" delay={480}>
               <h2 className="text-lg font-semibold text-cyan-300">Benefits</h2>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-300">
-                {result.benefits.length > 0 ? (
-                  result.benefits.map((item, i) => <li key={i}>{item}</li>)
+                {(Array.isArray(result.benefits) ? result.benefits : []).length > 0 ? (
+                  (Array.isArray(result.benefits) ? result.benefits : []).map((item, i) => <li key={i}>{item}</li>)
                 ) : (
                   <li className="text-slate-500">
                     No benefits section found.
@@ -598,7 +607,7 @@ export default function Home() {
             </Card>
 
             {/* 8 ── Red Flags (conditional) */}
-            {result.redFlags.length > 0 && (
+            {(Array.isArray(result.redFlags) ? result.redFlags : []).length > 0 && (
               <Card
                 id="card-red-flags"
                 delay={560}
@@ -608,7 +617,7 @@ export default function Home() {
                   ⚠️ Red Flags
                 </h2>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-amber-200/80">
-                  {result.redFlags.map((flag, i) => (
+                  {(Array.isArray(result.redFlags) ? result.redFlags : []).map((flag, i) => (
                      <li key={i}>{flag}</li>
                   ))}
                 </ul>
@@ -625,12 +634,12 @@ export default function Home() {
                 Learning Resources
               </h2>
               <div className="mt-4 space-y-2">
-                {result.learningResources.length > 0 ? (
-                  result.learningResources.map((lr, i) => {
+                {(Array.isArray(result.learningResources) ? result.learningResources : []).length > 0 ? (
+                  (Array.isArray(result.learningResources) ? result.learningResources : []).map((lr, i) => {
                     const isOpen = expandedResources[lr.skill] ?? false;
                     return (
                       <div
-                        key={lr.skill}
+                        key={lr.skill || `lr-${i}`}
                         className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/50"
                       >
                         <button
@@ -671,7 +680,7 @@ export default function Home() {
 
                         {isOpen && (
                           <div className="space-y-2 border-t border-slate-800 px-4 py-3">
-                            {lr.resources.map((res, ri) => (
+                            {(Array.isArray(lr.resources) ? lr.resources : []).map((res, ri) => (
                               <div
                                 key={ri}
                                 className="flex flex-wrap items-center gap-2 text-sm"
@@ -725,14 +734,14 @@ export default function Home() {
                 Preparation Roadmap
               </h2>
               <div className="mt-4 space-y-5">
-                {result.preparationRoadmap.map((phase, pi) => (
+                {(Array.isArray(result.preparationRoadmap) ? result.preparationRoadmap : []).map((phase, pi) => (
                   <div key={pi}>
                     <h3 className="flex items-center text-sm font-bold text-slate-100">
                       {phase.phase}
                       {priorityBadge(phase.priority)}
                     </h3>
                     <ul className="mt-2 space-y-1.5 pl-1">
-                      {phase.tasks.map((task, ti) => (
+                      {(Array.isArray(phase.tasks) ? phase.tasks : []).map((task, ti) => (
                         <li
                           key={ti}
                           className="flex items-start gap-2.5 text-sm text-slate-300"
@@ -749,6 +758,99 @@ export default function Home() {
               </div>
             </Card>
           </section>
+        )}
+
+        {/* ── History Panel ── */}
+        {isHistoryOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg max-h-[80vh] rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl overflow-y-auto">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-slate-100">
+                  Job History
+                </h2>
+                <button
+                  onClick={() => setIsHistoryOpen(false)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {historyEntries.length === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-8">
+                  No saved analyses yet. Results are saved automatically.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {historyEntries.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-slate-100">
+                          {entry.jobTitle}
+                        </p>
+                        <p className="truncate text-xs text-slate-400">
+                          {entry.companyName}
+                        </p>
+                        <p className="text-[10px] text-slate-500">
+                          {new Date(entry.timestamp).toLocaleString()}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const skills = entry.result.skills ?? [];
+                          setCheckedSkills(Object.fromEntries(skills.map((s) => [s.name, false])));
+                          setExpandedResources({});
+                          restore(entry.result);
+                          setIsHistoryOpen(false);
+                        }}
+                        className="shrink-0 rounded-lg bg-indigo-500/20 px-2.5 py-1 text-xs font-medium text-indigo-300 transition hover:bg-indigo-500/30"
+                      >
+                        Load
+                      </button>
+                      <button
+                        onClick={() => setPendingDeleteId(entry.id)}
+                        className="shrink-0 rounded-lg bg-red-500/20 px-2.5 py-1 text-xs font-medium text-red-300 transition hover:bg-red-500/30"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Delete Confirmation ── */}
+        {pendingDeleteId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-xl">
+              <h3 className="text-lg font-bold text-slate-100">Delete Analysis</h3>
+              <p className="mt-2 text-sm text-slate-400">
+                Are you sure you want to delete this analysis from history?
+              </p>
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={() => setPendingDeleteId(null)}
+                  className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    removeHistoryEntry(pendingDeleteId);
+                    setPendingDeleteId(null);
+                  }}
+                  className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-400"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>

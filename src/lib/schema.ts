@@ -22,6 +22,7 @@ export const skillLearningSchema = z.object({
   roadmapOrder: z
     .number()
     .int()
+    .positive()
     .describe("Suggested learning sequence order (1 = learn first)"),
   estimatedHours: z
     .string()
@@ -32,7 +33,7 @@ export const jobAnalysisSchema = z.object({
   jobTitle: z.string().describe("Exact job title from the posting"),
   companyName: z
     .string()
-    .describe("Company name, or 'Unknown' if not found"),
+    .describe("Company name, or 'Not specified' if not found"),
   location: z
     .string()
     .describe("Job location or 'Remote' or 'Not specified'"),
