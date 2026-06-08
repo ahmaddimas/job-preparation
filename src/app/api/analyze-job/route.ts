@@ -3,7 +3,7 @@ import dns from "node:dns/promises";
 import { NextResponse } from "next/server";
 
 import { analyzeWithAI, type AiConfig } from "@/lib/analyze";
-import { MAX_CHARS, truncateForAI } from "@/lib/html-cleaner";
+import { truncateForAI } from "@/lib/html-cleaner";
 import { logger, timed, generateRequestId } from "@/lib/logger";
 
 const PRIVATE_IPV4_RANGES = [
@@ -106,7 +106,7 @@ async function fetchJobContent(url: string, requestId: string): Promise<string> 
   );
   logger.info("jina.content", { requestId, rawBytes: rawText.length, readMs });
 
-  return rawText.slice(0, MAX_CHARS + 5_000);
+  return rawText.slice(0, 1_000_000);
 }
 
 export async function POST(request: Request) {
@@ -160,9 +160,22 @@ export async function POST(request: Request) {
     }
 
     const truncated = truncateForAI(jobText);
-    const stream = await analyzeWithAI(truncated, body.aiConfig);
+    logger.info("input.truncated", { requestId, originalChars: jobText.length, truncatedChars: truncated.length });
 
-    return stream.toTextStreamResponse();
+    logger.info("ai.stream.start", { requestId, provider: body.aiConfig.provider, model: body.aiConfig.model });
+    const aiStart = performance.now();
+
+    const stream = await timed(
+      "ai.init",
+      () => analyzeWithAI(truncated, body.aiConfig!),
+      { requestId }
+    );
+
+    const totalMs = Math.round(performance.now() - totalStart);
+    const aiInitMs = Math.round(performance.now() - aiStart);
+    logger.info("ai.stream.ready", { requestId, aiInitMs, totalMsBeforeStream: totalMs });
+
+    return stream.value.toTextStreamResponse();
   } catch (err) {
     const totalMs = Math.round(performance.now() - totalStart);
     const message = err instanceof Error ? err.message : "Something went wrong while analyzing the job posting.";
