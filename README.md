@@ -3,7 +3,7 @@
 [![CI](https://github.com/<your-org>/<your-repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<your-org>/<your-repo>/actions/workflows/ci.yml)
 [![Deploy](https://github.com/<your-org>/<your-repo>/actions/workflows/deploy.yml/badge.svg)](https://github.com/<your-org>/<your-repo>/actions/workflows/deploy.yml)
 
-**Live:** [job-preparation.vercel.app](https://job-preparation.vercel.app)
+**Live:** [job-preparation.vercel.app](https://job-preparation-ahmaddimas-projects.vercel.app/)
 
 AI-powered Next.js app that analyzes job postings and returns a skills checklist, tech stack breakdown, curated learning resources, and a phased preparation roadmap.
 
