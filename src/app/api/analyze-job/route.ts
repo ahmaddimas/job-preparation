@@ -2,7 +2,8 @@ import dns from "node:dns/promises";
 
 import { NextResponse } from "next/server";
 
-import { analyzeJobPosting } from "@/lib/job-analyzer";
+import { analyzeWithAI, type AiConfig } from "@/lib/analyze";
+import { cleanHtml, truncateForAI } from "@/lib/html-cleaner";
 
 const PRIVATE_IPV4_RANGES = [
   /^127\./,
@@ -50,61 +51,119 @@ async function isPrivateHost(hostname: string): Promise<boolean> {
   }
 }
 
+async function fetchJobContent(url: string): Promise<string> {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    throw new Error("Invalid URL format.");
+  }
+
+  if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+    throw new Error("Only HTTP and HTTPS URLs are allowed.");
+  }
+
+  if (await isPrivateHost(parsedUrl.hostname)) {
+    throw new Error("Private or local addresses are not allowed.");
+  }
+
+  let response: Response;
+  try {
+    // We use r.jina.ai to cleanly extract text from Javascript-heavy SPAs (like workable.com)
+    const jinaUrl = `https://r.jina.ai/${parsedUrl.toString()}`;
+    response = await fetch(jinaUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; JobPrepBot/1.0)",
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(15_000),
+      cache: "no-store",
+    });
+  } catch {
+    throw new Error(
+      "Unable to fetch the URL. The source site may block automated requests. Try pasting the job description text directly."
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `Unable to fetch the URL (status ${response.status}). Try pasting the job description text directly.`
+    );
+  }
+
+  return (await response.text()).slice(0, 1_000_000);
+}
+
 export async function POST(request: Request) {
   try {
-    const { url } = (await request.json()) as { url?: string };
+    const body = (await request.json()) as {
+      url?: string;
+      text?: string;
+      aiConfig?: AiConfig;
+    };
 
-    if (!url) {
-      return NextResponse.json({ error: "Please provide a job URL." }, { status: 400 });
-    }
-
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(url);
-    } catch {
-      return NextResponse.json({ error: "Invalid URL format." }, { status: 400 });
-    }
-
-    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-      return NextResponse.json({ error: "Only HTTP and HTTPS URLs are allowed." }, { status: 400 });
-    }
-
-    if (await isPrivateHost(parsedUrl.hostname)) {
-      return NextResponse.json({ error: "Private or local addresses are not allowed." }, { status: 400 });
-    }
-
-    let response: Response;
-    try {
-      response = await fetch(parsedUrl.toString(), {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; JobPrepBot/1.0)",
-          Accept: "text/html,application/xhtml+xml",
-        },
-        redirect: "follow",
-        signal: AbortSignal.timeout(15_000),
-        cache: "no-store",
-      });
-    } catch {
+    if (!body.aiConfig || !body.aiConfig.apiKey) {
       return NextResponse.json(
-        { error: "Unable to fetch the URL. The source site may block automated requests." },
-        { status: 400 },
+        { error: "AI API Key is missing. Please configure it in Settings." },
+        { status: 401 }
       );
     }
 
-    if (!response.ok) {
-      return NextResponse.json({ error: `Unable to fetch the URL (status ${response.status}).` }, { status: 400 });
+    let jobText: string;
+
+    if (body.text && body.text.trim().length > 0) {
+      jobText = body.text.trim();
+    } else if (body.url && body.url.trim().length > 0) {
+      // Fetch cleanly extracted markdown content via Jina Reader
+      jobText = await fetchJobContent(body.url.trim());
+    } else {
+      return NextResponse.json(
+        {
+          error:
+            "Please provide a job URL or paste the job description text.",
+        },
+        { status: 400 }
+      );
     }
 
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.includes("text/html")) {
-      return NextResponse.json({ error: "The URL did not return an HTML job page." }, { status: 400 });
+    if (jobText.length < 50) {
+      return NextResponse.json(
+        {
+          error:
+            "The content is too short to analyze. Please provide a complete job posting.",
+        },
+        { status: 400 }
+      );
     }
 
-    const html = (await response.text()).slice(0, 1_000_000);
-    const result = analyzeJobPosting(html);
+    const truncated = truncateForAI(jobText);
+    const result = await analyzeWithAI(truncated, body.aiConfig);
 
     return NextResponse.json(result);
-  } catch {
-    return NextResponse.json({ error: "Something went wrong while analyzing the job posting." }, { status: 500 });
+  } catch (err) {
+    const message =
+      err instanceof Error
+        ? err.message
+        : "Something went wrong while analyzing the job posting.";
+
+    if (
+      err instanceof Error &&
+      (message.includes("URL") ||
+        message.includes("fetch") ||
+        message.includes("Private") ||
+        message.includes("short") ||
+        message.includes("HTML"))
+    ) {
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    console.error("Analysis error:", err);
+    return NextResponse.json(
+      {
+        error:
+          "Something went wrong while analyzing the job posting. Check your API key and try again.",
+      },
+      { status: 500 }
+    );
   }
 }
