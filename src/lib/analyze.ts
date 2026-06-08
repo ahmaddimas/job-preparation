@@ -62,8 +62,15 @@ const providerStrategies: Record<AiProvider, ModelFactory> = {
 
 /**
  * Analyze a job posting using AI and return a streamable object result.
-  const strategy = providerStrategies[config.provider] ?? providerStrategies.google;
-  const aiModel = await strategy(config.apiKey, config.model);
+ * Uses streamObject for compatibility with free/rate-limited models that
+ * may not support strict single-shot structured output.
+ */
+export async function analyzeWithAI(jobText: string, config: AiConfig) {
+  const strategy = providerStrategies[config.provider];
+  if (!strategy) {
+    console.warn(`[analyze] Unknown provider "${config.provider}", falling back to Google`);
+  }
+  const aiModel = await (strategy ?? providerStrategies.google)(config.apiKey, config.model);
 
   return streamObject({
     model: aiModel,

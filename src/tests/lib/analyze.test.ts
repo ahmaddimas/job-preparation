@@ -26,7 +26,7 @@ vi.mock("@openrouter/ai-sdk-provider", () => ({
 }));
 
 const mockStreamResult = {
-  toTextStreamResponse: vi.fn().mockReturnValue(new Response("{}")),
+  partialObjectStream: (async function* () {})(),
 };
 
 describe("analyzeWithAI", () => {
