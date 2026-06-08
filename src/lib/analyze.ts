@@ -1,4 +1,4 @@
-import { generateObject } from "ai";
+import { streamObject } from "ai";
 import type { LanguageModel } from "ai";
 
 import { jobAnalysisSchema, type JobAnalysis } from "./schema";
@@ -61,25 +61,17 @@ const providerStrategies: Record<AiProvider, ModelFactory> = {
 };
 
 /**
- * Analyze a job posting using AI and return structured results.
+ * Analyze a job posting using AI and return a streamable object result.
  */
-export async function analyzeWithAI(
-  jobText: string,
-  config: AiConfig
-): Promise<JobAnalysis> {
+export async function analyzeWithAI(jobText: string, config: AiConfig) {
   const strategy = providerStrategies[config.provider] ?? providerStrategies.google;
   const aiModel = await strategy(config.apiKey, config.model);
 
-  const { object } = await generateObject({
+  return streamObject({
     model: aiModel,
     schema: jobAnalysisSchema,
     system: SYSTEM_PROMPT,
     prompt: `Analyze the following job posting and extract all information according to the schema. Be thorough and precise.\n\n---\n\n${jobText}`,
     temperature: 0.1,
   });
-
-  // Sort learning resources by roadmap order
-  object.learningResources.sort((a, b) => a.roadmapOrder - b.roadmapOrder);
-
-  return object;
 }

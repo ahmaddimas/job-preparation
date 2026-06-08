@@ -137,9 +137,9 @@ export async function POST(request: Request) {
     }
 
     const truncated = truncateForAI(jobText);
-    const result = await analyzeWithAI(truncated, body.aiConfig);
+    const stream = await analyzeWithAI(truncated, body.aiConfig);
 
-    return NextResponse.json(result);
+    return stream.toTextStreamResponse();
   } catch (err) {
     const message =
       err instanceof Error

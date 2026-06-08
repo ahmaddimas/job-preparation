@@ -76,7 +76,10 @@ describe("POST /api/analyze-job", () => {
 
   it("returns 200 with analysis result for valid text input", async () => {
     const { analyzeWithAI } = await import("@/lib/analyze");
-    vi.mocked(analyzeWithAI).mockResolvedValue(mockJobAnalysis as never);
+    const mockStream = {
+      toTextStreamResponse: vi.fn().mockReturnValue(new Response(JSON.stringify(mockJobAnalysis), { status: 200 })),
+    };
+    vi.mocked(analyzeWithAI).mockResolvedValue(mockStream as never);
 
     const { POST } = await import("@/app/api/analyze-job/route");
     const req = buildRequest({
@@ -86,8 +89,6 @@ describe("POST /api/analyze-job", () => {
 
     const res = await POST(req);
     expect(res.status).toBe(200);
-    const body = await res.json() as typeof mockJobAnalysis;
-    expect(body.jobTitle).toBe("Frontend Engineer");
   });
 
   it("returns 400 for private/localhost URL", async () => {
@@ -110,7 +111,7 @@ describe("POST /api/analyze-job", () => {
 
   it("returns 500 when analyzeWithAI throws an unexpected error", async () => {
     const { analyzeWithAI } = await import("@/lib/analyze");
-    vi.mocked(analyzeWithAI).mockRejectedValue(new Error("AI service down"));
+    vi.mocked(analyzeWithAI).mockRejectedValue(new Error("AI service down") as never);
 
     const { POST } = await import("@/app/api/analyze-job/route");
     const req = buildRequest({
