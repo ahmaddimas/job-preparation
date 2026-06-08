@@ -3,6 +3,8 @@
 [![CI](https://github.com/<your-org>/<your-repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<your-org>/<your-repo>/actions/workflows/ci.yml)
 [![Deploy](https://github.com/<your-org>/<your-repo>/actions/workflows/deploy.yml/badge.svg)](https://github.com/<your-org>/<your-repo>/actions/workflows/deploy.yml)
 
+**Live:** [job-preparation.vercel.app](https://job-preparation.vercel.app)
+
 AI-powered Next.js app that analyzes job postings and returns a skills checklist, tech stack breakdown, curated learning resources, and a phased preparation roadmap.
 
 Supports Google Gemini, OpenAI, Anthropic, Groq, and OpenRouter. API keys are entered in the app's Settings modal and stored in the browser only.
