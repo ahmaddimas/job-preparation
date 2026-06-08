@@ -26,7 +26,7 @@ vi.mock("@openrouter/ai-sdk-provider", () => ({
 }));
 
 const mockStreamResult = {
-  toTextStreamResponse: vi.fn().mockReturnValue(new Response("{}")),
+  partialObjectStream: (async function* () {})(),
 };
 
 describe("analyzeWithAI", () => {
@@ -70,5 +70,15 @@ describe("analyzeWithAI", () => {
 
     const callArgs = mockStreamObject.mock.calls[0][0] as { prompt: string };
     expect(callArgs.prompt).toContain(jobText);
+  });
+
+  it("warns and falls back to Google for unknown provider", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { analyzeWithAI } = await import("@/lib/analyze");
+    const config = { provider: "unknown" as never, model: "x", apiKey: "key" };
+    await analyzeWithAI("job text", config);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Unknown provider"));
+    expect(mockStreamObject).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });

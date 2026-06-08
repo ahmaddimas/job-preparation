@@ -30,7 +30,8 @@ function log(level: LogLevel, msg: string, meta: Record<string, unknown> = {}) {
     else if (level === "warn") console.warn(line);
     else console.log(line);
   } else {
-    console.log(JSON.stringify(entry));
+    const logFn = level === "error" ? console.error : level === "warn" ? console.warn : console.log;
+    logFn(JSON.stringify(entry));
   }
 }
 
