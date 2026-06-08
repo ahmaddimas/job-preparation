@@ -38,17 +38,10 @@ const skillPatterns: { skill: string; pattern: RegExp; resource: { title: string
 
 function cleanText(html: string): string {
   return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<(p|div|li|br|ul|ol|section|article)[^>]*>/gi, "\n")
     .replace(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/gi, (_, heading: string) => `\n[[heading]]${heading}\n`)
     .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/&[a-zA-Z#0-9]+;/g, " ")
     .replace(/[ \t]+/g, " ");
 }
 
