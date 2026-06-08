@@ -3,7 +3,7 @@ import dns from "node:dns/promises";
 import { NextResponse } from "next/server";
 
 import { analyzeWithAI, type AiConfig } from "@/lib/analyze";
-import { cleanHtml, truncateForAI } from "@/lib/html-cleaner";
+import { truncateForAI } from "@/lib/html-cleaner";
 
 const PRIVATE_IPV4_RANGES = [
   /^127\./,
