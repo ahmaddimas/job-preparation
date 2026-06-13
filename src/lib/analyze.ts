@@ -79,14 +79,26 @@ async function getModel(config: AiConfig): Promise<LanguageModel> {
  * Uses streamObject for compatibility with free/rate-limited models that
  * may not support strict single-shot structured output.
  */
-export async function analyzeWithAI(jobText: string, config: AiConfig) {
+export async function analyzeWithAI(
+  jobText: string,
+  config: AiConfig,
+  candidateSkills?: string
+) {
   const aiModel = await getModel(config);
+
+  let prompt = `Analyze the following job posting and extract all information according to the schema. Be thorough and precise.\n\n---\n\n${jobText}`;
+
+  if (candidateSkills && candidateSkills.trim().length > 0) {
+    prompt += `\n\n---\n\nThe candidate describes their skills as:\n${candidateSkills}\n\nInclude a gapAnalysis comparing the candidate's skills to the job requirements. Be honest: highlight strong matches, partial matches with bridging strategies, and concrete gaps with actionable steps.`;
+  } else {
+    prompt += `\n\n---\n\nNo candidate skills were provided. Omit the gapAnalysis field.`;
+  }
 
   return streamObject({
     model: aiModel,
     schema: jobAnalysisSchema,
     system: SYSTEM_PROMPT,
-    prompt: `Analyze the following job posting and extract all information according to the schema. Be thorough and precise.\n\n---\n\n${jobText}`,
+    prompt,
     temperature: 0.1,
   });
 }

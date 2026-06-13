@@ -130,6 +130,7 @@ export async function POST(request: Request) {
       url?: string;
       text?: string;
       aiConfig?: AiConfig;
+      candidateSkills?: string;
     };
 
     const inputMode = body.url ? "url" : "text";
@@ -172,11 +173,16 @@ export async function POST(request: Request) {
     const truncated = truncateForAI(jobText);
     logger.info("input.truncated", { requestId, originalChars: jobText.length, truncatedChars: truncated.length });
 
-    logger.info("ai.stream.start", { requestId, provider: body.aiConfig.provider, model: body.aiConfig.model });
+    let candidateSkills: string | undefined;
+    if (body.candidateSkills && body.candidateSkills.trim().length > 0) {
+      candidateSkills = body.candidateSkills.trim();
+    }
+
+    logger.info("ai.stream.start", { requestId, provider: body.aiConfig.provider, model: body.aiConfig.model, hasCandidateSkills: !!candidateSkills });
 
     const { value: stream, durationMs: aiInitMs } = await timed(
       "ai.init",
-      () => analyzeWithAI(truncated, body.aiConfig!),
+      () => analyzeWithAI(truncated, body.aiConfig!, candidateSkills),
       { requestId }
     );
 

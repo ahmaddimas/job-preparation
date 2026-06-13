@@ -127,6 +127,49 @@ export const jobAnalysisSchema = z.object({
       "Learning resources for each required and nice-to-have skill, ordered by roadmapOrder"
     ),
 
+  gapAnalysis: z
+    .object({
+      summary: z
+        .string()
+        .describe(
+          "Overall assessment of how well the candidate's stated skills match the job requirements"
+        ),
+      strongMatches: z
+        .array(
+          z.object({
+            skill: z.string(),
+            evidence: z.string(),
+          })
+        )
+        .describe("Skills where the candidate clearly meets or exceeds requirements"),
+      partialMatches: z
+        .array(
+          z.object({
+            skill: z.string(),
+            gap: z.string(),
+            bridging: z.string(),
+          })
+        )
+        .describe(
+          "Skills where the candidate has related but not identical experience, with bridging strategies"
+        ),
+      gaps: z
+        .array(
+          z.object({
+            skill: z.string(),
+            impact: z.string(),
+            action: z.string(),
+          })
+        )
+        .describe(
+          "Skills the candidate is missing, why they matter, and concrete steps to close the gap"
+        ),
+    })
+    .optional()
+    .describe(
+      "Gap analysis comparing the candidate's stated skills to job requirements. Omit this field if no candidateSkills were provided."
+    ),
+
   preparationRoadmap: z
     .array(
       z.object({

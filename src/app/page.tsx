@@ -29,6 +29,8 @@ export default function Home() {
   const [inputMode, setInputMode] = useState<"url" | "text">("url");
   const [jobUrl, setJobUrl] = useState("");
   const [jobText, setJobText] = useState("");
+  const [candidateSkills, setCandidateSkills] = useState("");
+  const [showGapInput, setShowGapInput] = useState(false);
   const [checkedSkills, setCheckedSkills] = useState<Record<string, boolean>>({});
   const [expandedResources, setExpandedResources] = useState<Record<string, boolean>>({});
 
@@ -87,8 +89,8 @@ export default function Home() {
 
     const input =
       inputMode === "url"
-        ? { url: jobUrl.trim() }
-        : { text: jobText.trim() };
+        ? { url: jobUrl.trim(), candidateSkills: showGapInput ? candidateSkills.trim() : undefined }
+        : { text: jobText.trim(), candidateSkills: showGapInput ? candidateSkills.trim() : undefined };
 
     const analysisResult = await analyze(input, aiConfig);
 
@@ -330,6 +332,30 @@ export default function Home() {
           </div>
 
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
+            {/* Gap analysis toggle */}
+            <button
+              type="button"
+              onClick={() => setShowGapInput(!showGapInput)}
+              className={`self-start flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                showGapInput
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                  : "bg-slate-950 text-slate-400 border border-slate-700 hover:text-slate-200"
+              }`}
+            >
+              {showGapInput ? "✓ Gap Analysis" : "+ Gap Analysis"}
+            </button>
+
+            {showGapInput && (
+              <textarea
+                id="input-candidate-skills"
+                className="min-h-[100px] w-full rounded-xl border border-emerald-500/30 bg-slate-950 px-4 py-3 text-sm leading-relaxed outline-none ring-emerald-400 placeholder:text-slate-500 focus:ring-2"
+                placeholder="Paste your skills or CV summary. E.g. Java/Spring Boot 5 years, React basics, PostgreSQL, Docker, no Kubernetes experience..."
+                value={candidateSkills}
+                onChange={(e) => setCandidateSkills(e.target.value)}
+                aria-label="Your skills for gap analysis"
+              />
+            )}
+
             {inputMode === "url" ? (
               <input
                 id="input-url"
@@ -624,7 +650,82 @@ export default function Home() {
               </Card>
             )}
 
-            {/* 9 ── Learning Resources (full width) */}
+            {/* 9 ── Gap Analysis (conditional) */}
+            {result.gapAnalysis && (
+              <Card id="card-gap-analysis" delay={600} className="md:col-span-2 border-emerald-500/30 bg-emerald-500/5">
+                <h2 className="text-lg font-semibold text-emerald-300">
+                  Gap Analysis
+                </h2>
+                <p className="mt-2 text-sm text-slate-300">
+                  {result.gapAnalysis.summary}
+                </p>
+
+                {result.gapAnalysis.strongMatches && result.gapAnalysis.strongMatches.length > 0 && (
+                  <div className="mt-4">
+                    <h3 className="text-sm font-semibold text-emerald-400">
+                      Strong Matches
+                    </h3>
+                    <ul className="mt-2 space-y-2">
+                      {result.gapAnalysis.strongMatches.map((m, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm">
+                          <span className="mt-1 text-emerald-400">✓</span>
+                          <div>
+                            <span className="font-medium text-slate-100">{m.skill}</span>
+                            <span className="text-slate-400"> — {m.evidence}</span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {result.gapAnalysis.partialMatches && result.gapAnalysis.partialMatches.length > 0 && (
+                  <div className="mt-4">
+                    <h3 className="text-sm font-semibold text-amber-400">
+                      Partial Matches
+                    </h3>
+                    <ul className="mt-2 space-y-2">
+                      {result.gapAnalysis.partialMatches.map((m, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm">
+                          <span className="mt-1 text-amber-400">~</span>
+                          <div>
+                            <span className="font-medium text-slate-100">{m.skill}</span>
+                            <span className="text-slate-400"> — {m.gap}</span>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              Bridge: {m.bridging}
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {result.gapAnalysis.gaps && result.gapAnalysis.gaps.length > 0 && (
+                  <div className="mt-4">
+                    <h3 className="text-sm font-semibold text-red-400">
+                      Gaps
+                    </h3>
+                    <ul className="mt-2 space-y-2">
+                      {result.gapAnalysis.gaps.map((m, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm">
+                          <span className="mt-1 text-red-400">✗</span>
+                          <div>
+                            <span className="font-medium text-slate-100">{m.skill}</span>
+                            <span className="text-slate-400"> — {m.impact}</span>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              Action: {m.action}
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </Card>
+            )}
+
+            {/* 10 ── Learning Resources (full width) */}
             <Card
               id="card-learning-resources"
               delay={640}
@@ -724,7 +825,7 @@ export default function Home() {
               </div>
             </Card>
 
-            {/* 10 ── Preparation Roadmap (full width) */}
+            {/* 11 ── Preparation Roadmap (full width) */}
             <Card
               id="card-preparation-roadmap"
               delay={720}
