@@ -5,6 +5,7 @@ import { Card } from "@/components/Card";
 import { useJobAnalysis } from "@/hooks/useJobAnalysis";
 import { useJobHistory } from "@/hooks/useJobHistory";
 import type { AiProvider, AiConfig } from "@/lib/analyze";
+import { getDefaultModel, getApiKey, PROVIDER_MODELS } from "@/lib/analyze";
 import type { ApplicationStatus } from "@/lib/storage";
 
 const STATUS_CONFIG: Record<ApplicationStatus, { label: string; color: string }> = {
@@ -19,7 +20,7 @@ const STATUS_CONFIG: Record<ApplicationStatus, { label: string; color: string }>
 const DEFAULT_CONFIG: AiConfig = {
   provider: "google",
   model: "gemini-2.5-flash",
-  apiKey: "",
+  apiKeys: {},
 };
 
 export default function Home() {
@@ -28,7 +29,21 @@ export default function Home() {
     if (typeof window === "undefined") return DEFAULT_CONFIG;
     try {
       const saved = localStorage.getItem("job-prep-ai-config");
-      return saved ? (JSON.parse(saved) as AiConfig) : DEFAULT_CONFIG;
+      if (!saved) return DEFAULT_CONFIG;
+      const parsed = JSON.parse(saved);
+      if (parsed.apiKeys && typeof parsed.apiKeys === "object") {
+        const config = parsed as AiConfig;
+        return { ...DEFAULT_CONFIG, ...config };
+      }
+      if (typeof parsed.apiKey === "string") {
+        const migrated: AiConfig = {
+          provider: (parsed.provider as AiProvider) ?? DEFAULT_CONFIG.provider,
+          model: parsed.model ?? DEFAULT_CONFIG.model,
+          apiKeys: { [parsed.provider ?? DEFAULT_CONFIG.provider]: parsed.apiKey },
+        };
+        return migrated;
+      }
+      return DEFAULT_CONFIG;
     } catch {
       return DEFAULT_CONFIG;
     }
@@ -122,7 +137,7 @@ export default function Home() {
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!aiConfig.apiKey.trim()) {
+    if (!getApiKey(aiConfig)) {
       setIsSettingsOpen(true);
       return;
     }
@@ -277,14 +292,20 @@ export default function Home() {
                   <label className="mb-1 block text-sm font-medium text-slate-300">
                     Provider
                   </label>
-                  <select
+                   <select
                     value={aiConfig.provider}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const newProvider = e.target.value as AiProvider;
+                      const previousModel = aiConfig.models?.[newProvider];
+                      const nextModel = previousModel ?? getDefaultModel(newProvider);
+                      const nextModels = { ...aiConfig.models, [aiConfig.provider]: aiConfig.model };
                       setAiConfig({
                         ...aiConfig,
-                        provider: e.target.value as AiProvider,
-                      })
-                    }
+                        provider: newProvider,
+                        model: nextModel,
+                        models: nextModels,
+                      });
+                    }}
                     className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
                   >
                     <option value="google">Google Gemini</option>
@@ -292,6 +313,7 @@ export default function Home() {
                     <option value="anthropic">Anthropic</option>
                     <option value="groq">Groq</option>
                     <option value="openrouter">OpenRouter</option>
+                    <option value="opencode">OpenCode Go</option>
                   </select>
                 </div>
                 
@@ -299,15 +321,39 @@ export default function Home() {
                   <label className="mb-1 block text-sm font-medium text-slate-300">
                     Model
                   </label>
-                  <input
-                    type="text"
-                    value={aiConfig.model}
-                    onChange={(e) =>
-                      setAiConfig({ ...aiConfig, model: e.target.value })
-                    }
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
-                    placeholder="e.g. gemini-2.5-flash, gpt-4o-mini"
-                  />
+                  {aiConfig.provider === "openrouter" ? (
+                    <input
+                      type="text"
+                      value={aiConfig.model}
+                      onChange={(e) =>
+                        setAiConfig({
+                          ...aiConfig,
+                          model: e.target.value,
+                          models: { ...aiConfig.models, [aiConfig.provider]: e.target.value },
+                        })
+                      }
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
+                      placeholder="e.g. google/gemini-2.5-flash"
+                    />
+                  ) : (
+                    <select
+                      value={aiConfig.model}
+                      onChange={(e) =>
+                        setAiConfig({
+                          ...aiConfig,
+                          model: e.target.value,
+                          models: { ...aiConfig.models, [aiConfig.provider]: e.target.value },
+                        })
+                      }
+                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
+                    >
+                      {PROVIDER_MODELS[aiConfig.provider as "google"].models.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 <div>
@@ -316,15 +362,18 @@ export default function Home() {
                   </label>
                   <input
                     type="password"
-                    value={aiConfig.apiKey}
+                    value={getApiKey(aiConfig)}
                     onChange={(e) =>
-                      setAiConfig({ ...aiConfig, apiKey: e.target.value })
+                      setAiConfig({
+                        ...aiConfig,
+                        apiKeys: { ...aiConfig.apiKeys, [aiConfig.provider]: e.target.value },
+                      })
                     }
                     className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
                     placeholder="Enter your API key"
                   />
                   <p className="mt-1 text-xs text-slate-500">
-                    Stored locally in your browser.
+                    Stored locally in your browser. Keys are saved per provider.
                   </p>
                 </div>
               </div>
