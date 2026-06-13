@@ -22,13 +22,59 @@ Your task: Given a job posting text, extract and analyze ALL relevant informatio
 8. **Be direct**: No fluff, no padding. Every word should be useful.
 9. **Infer when necessary**: If the posting is vague about certain fields (like company name), use "Not specified" rather than guessing.`;
 
-export type AiProvider = "google" | "openai" | "anthropic" | "groq" | "openrouter";
+export type AiProvider = "google" | "openai" | "anthropic" | "groq" | "openrouter" | "opencode";
 
 export type AiConfig = {
   provider: AiProvider;
   model: string;
-  apiKey: string;
+  apiKeys: Partial<Record<AiProvider, string>>;
+  models?: Partial<Record<AiProvider, string>>;
 };
+
+/**
+ * Model catalog: default model and available models per provider.
+ * OpenRouter has hundreds of models — kept as free-text input.
+ */
+export const PROVIDER_MODELS: Record<Exclude<AiProvider, "openrouter">, { default: string; models: string[] }> = {
+  google: {
+    default: "gemini-2.5-flash",
+    models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash"],
+  },
+  openai: {
+    default: "gpt-4o-mini",
+    models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-nano"],
+  },
+  anthropic: {
+    default: "claude-sonnet-4-20250514",
+    models: ["claude-sonnet-4-20250514", "claude-haiku-4-20250514", "claude-opus-4-20250514"],
+  },
+  groq: {
+    default: "llama-3.3-70b-versatile",
+    models: ["llama-3.3-70b-versatile", "llama-4-maverick-128k", "deepseek-r1-distill-llama-70b"],
+  },
+  opencode: {
+    default: "deepseek-v4-pro",
+    models: [
+      "deepseek-v4-pro",
+      "deepseek-v4-flash",
+      "glm-5.1",
+      "glm-5",
+      "kimi-k2.7-code",
+      "kimi-k2.6",
+      "mimo-v2.5",
+      "mimo-v2.5-pro",
+    ],
+  },
+};
+
+export function getDefaultModel(provider: AiProvider): string {
+  if (provider === "openrouter") return "google/gemini-2.5-flash";
+  return PROVIDER_MODELS[provider].default;
+}
+
+export function getApiKey(config: AiConfig): string {
+  return config.apiKeys[config.provider] ?? "";
+}
 
 /**
  * Strategy pattern: each provider is a factory function that receives
@@ -58,6 +104,14 @@ const providerStrategies: Record<AiProvider, ModelFactory> = {
     const { createOpenRouter } = await import("@openrouter/ai-sdk-provider");
     return createOpenRouter({ apiKey })(model);
   },
+  opencode: async (apiKey, model) => {
+    const { createOpenAICompatible } = await import("@ai-sdk/openai-compatible");
+    return createOpenAICompatible({
+      name: "opencode",
+      apiKey,
+      baseURL: "https://opencode.ai/zen/go/v1",
+    })(model);
+  },
 };
 
 /**
@@ -71,7 +125,7 @@ async function getModel(config: AiConfig): Promise<LanguageModel> {
       `Unknown AI provider "${config.provider}". Supported providers: ${Object.keys(providerStrategies).join(", ")}.`
     );
   }
-  return strategy(config.apiKey, config.model);
+  return strategy(getApiKey(config), config.model);
 }
 
 /**

@@ -2,7 +2,7 @@ import dns from "node:dns/promises";
 
 import { NextResponse } from "next/server";
 
-import { analyzeWithAI, type AiConfig } from "@/lib/analyze";
+import { analyzeWithAI, getApiKey, type AiConfig } from "@/lib/analyze";
 import { MAX_CHARS, truncateForAI } from "@/lib/html-cleaner";
 import { logger, timed, generateRequestId } from "@/lib/logger";
 
@@ -136,7 +136,7 @@ export async function POST(request: Request) {
     const inputMode = body.url ? "url" : "text";
     logger.info("request.input", { requestId, inputMode, provider: body.aiConfig?.provider, model: body.aiConfig?.model });
 
-    if (!body.aiConfig || !body.aiConfig.apiKey) {
+    if (!body.aiConfig || !getApiKey(body.aiConfig)) {
       return NextResponse.json(
         { error: "AI API Key is missing. Please configure it in Settings." },
         { status: 401 }

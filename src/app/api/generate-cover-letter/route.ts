@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { generateWithAI, type AiConfig } from "@/lib/analyze";
+import { generateWithAI, getApiKey, type AiConfig } from "@/lib/analyze";
 
 export async function POST(request: Request) {
   const contentLength = request.headers.get("content-length");
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!body.aiConfig || !body.aiConfig.apiKey) {
+    if (!body.aiConfig || !getApiKey(body.aiConfig)) {
       return NextResponse.json(
         { error: "AI API key is required." },
         { status: 401 }
