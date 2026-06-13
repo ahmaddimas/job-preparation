@@ -3,9 +3,9 @@
 import { useState, useCallback } from "react";
 import type { JobAnalysis } from "@/lib/schema";
 import { loadJobHistory, saveJobHistory } from "@/lib/storage";
-import type { HistoryEntry } from "@/lib/storage";
+import type { HistoryEntry, ApplicationStatus } from "@/lib/storage";
 
-export type { HistoryEntry };
+export type { HistoryEntry, ApplicationStatus };
 
 const MAX_ENTRIES = 50;
 
@@ -22,6 +22,7 @@ export function useJobHistory() {
         timestamp: Date.now(),
         inputKey,
         result,
+        status: "prepping",
       });
       const trimmed = updated.slice(0, MAX_ENTRIES);
       saveJobHistory(trimmed);
@@ -40,5 +41,15 @@ export function useJobHistory() {
     return true;
   }, [entries]);
 
-  return { entries, addEntry, removeEntry };
+  const updateStatus = useCallback((id: string, status: ApplicationStatus) => {
+    setEntries((prev) => {
+      const updated = prev.map((e) =>
+        e.id === id ? { ...e, status } : e
+      );
+      saveJobHistory(updated);
+      return updated;
+    });
+  }, []);
+
+  return { entries, addEntry, removeEntry, updateStatus };
 }

@@ -1,5 +1,13 @@
 import type { JobAnalysis } from "./schema";
 
+export type ApplicationStatus =
+  | "prepping"
+  | "applied"
+  | "phone-screen"
+  | "onsite"
+  | "offer"
+  | "rejected";
+
 export interface HistoryEntry {
   id: string;
   jobTitle: string;
@@ -7,6 +15,7 @@ export interface HistoryEntry {
   timestamp: number;
   inputKey: string;
   result: Partial<JobAnalysis>;
+  status: ApplicationStatus;
 }
 
 const STORAGE_KEY = "job-prep-history";

@@ -1,4 +1,4 @@
-import { streamObject } from "ai";
+import { streamObject, streamText } from "ai";
 import type { LanguageModel } from "ai";
 
 import { jobAnalysisSchema } from "./schema";
@@ -61,22 +61,59 @@ const providerStrategies: Record<AiProvider, ModelFactory> = {
 };
 
 /**
+ * Resolve an AiConfig to a LanguageModel instance.
+ * Throws on unknown providers instead of silently falling back.
+ */
+async function getModel(config: AiConfig): Promise<LanguageModel> {
+  const strategy = providerStrategies[config.provider];
+  if (!strategy) {
+    throw new Error(
+      `Unknown AI provider "${config.provider}". Supported providers: ${Object.keys(providerStrategies).join(", ")}.`
+    );
+  }
+  return strategy(config.apiKey, config.model);
+}
+
+/**
  * Analyze a job posting using AI and return a streamable object result.
  * Uses streamObject for compatibility with free/rate-limited models that
  * may not support strict single-shot structured output.
  */
-export async function analyzeWithAI(jobText: string, config: AiConfig) {
-  const strategy = providerStrategies[config.provider];
-  if (!strategy) {
-    console.warn(`[analyze] Unknown provider "${config.provider}", falling back to Google`);
+export async function analyzeWithAI(
+  jobText: string,
+  config: AiConfig,
+  candidateSkills?: string
+) {
+  const aiModel = await getModel(config);
+
+  let prompt = `Analyze the following job posting and extract all information according to the schema. Be thorough and precise.\n\n---\n\n${jobText}`;
+
+  if (candidateSkills && candidateSkills.trim().length > 0) {
+    prompt += `\n\n---\n\nThe candidate describes their skills as:\n${candidateSkills}\n\nInclude a gapAnalysis comparing the candidate's skills to the job requirements. Be honest: highlight strong matches, partial matches with bridging strategies, and concrete gaps with actionable steps.`;
+  } else {
+    prompt += `\n\n---\n\nNo candidate skills were provided. Omit the gapAnalysis field.`;
   }
-  const aiModel = await (strategy ?? providerStrategies.google)(config.apiKey, config.model);
 
   return streamObject({
     model: aiModel,
     schema: jobAnalysisSchema,
     system: SYSTEM_PROMPT,
-    prompt: `Analyze the following job posting and extract all information according to the schema. Be thorough and precise.\n\n---\n\n${jobText}`,
+    prompt,
     temperature: 0.1,
+  });
+}
+
+/**
+ * Generate free-form text using AI for tasks like cover letters.
+ */
+export async function generateWithAI(prompt: string, config: AiConfig) {
+  const aiModel = await getModel(config);
+
+  return streamText({
+    model: aiModel,
+    system:
+      "You are a professional career coach and cover letter writer. Be direct, confident, and specific. No fluff.",
+    prompt,
+    temperature: 0.3,
   });
 }

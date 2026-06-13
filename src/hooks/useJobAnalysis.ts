@@ -14,7 +14,7 @@ interface AnalysisState {
 }
 
 interface UseJobAnalysisReturn extends AnalysisState {
-  analyze: (input: { url?: string; text?: string }, config: AiConfig) => Promise<Partial<JobAnalysis> | null>;
+  analyze: (input: { url?: string; text?: string; candidateSkills?: string }, config: AiConfig) => Promise<Partial<JobAnalysis> | null>;
   reset: () => void;
   restore: (data: Partial<JobAnalysis>) => void;
 }
@@ -37,7 +37,7 @@ export function useJobAnalysis(): UseJobAnalysisReturn {
   }
 
   async function analyze(
-    input: { url?: string; text?: string },
+    input: { url?: string; text?: string; candidateSkills?: string },
     config: AiConfig
   ): Promise<Partial<JobAnalysis> | null> {
     setState({ result: null, loading: true, error: null });

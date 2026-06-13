@@ -109,17 +109,28 @@ async function fetchJobContent(url: string, requestId: string): Promise<string> 
   return rawText.slice(0, MAX_CHARS + 5_000);
 }
 
+const MAX_BODY_SIZE = 1_000_000;
+
 export async function POST(request: Request) {
   const requestId = generateRequestId();
   const totalStart = performance.now();
 
   logger.info("request.start", { requestId });
 
+  const contentLength = request.headers.get("content-length");
+  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
+    return NextResponse.json(
+      { error: "Request body too large. Maximum 1MB." },
+      { status: 413 }
+    );
+  }
+
   try {
     const body = (await request.json()) as {
       url?: string;
       text?: string;
       aiConfig?: AiConfig;
+      candidateSkills?: string;
     };
 
     const inputMode = body.url ? "url" : "text";
@@ -162,11 +173,16 @@ export async function POST(request: Request) {
     const truncated = truncateForAI(jobText);
     logger.info("input.truncated", { requestId, originalChars: jobText.length, truncatedChars: truncated.length });
 
-    logger.info("ai.stream.start", { requestId, provider: body.aiConfig.provider, model: body.aiConfig.model });
+    let candidateSkills: string | undefined;
+    if (body.candidateSkills && body.candidateSkills.trim().length > 0) {
+      candidateSkills = body.candidateSkills.trim();
+    }
+
+    logger.info("ai.stream.start", { requestId, provider: body.aiConfig.provider, model: body.aiConfig.model, hasCandidateSkills: !!candidateSkills });
 
     const { value: stream, durationMs: aiInitMs } = await timed(
       "ai.init",
-      () => analyzeWithAI(truncated, body.aiConfig!),
+      () => analyzeWithAI(truncated, body.aiConfig!, candidateSkills),
       { requestId }
     );
 

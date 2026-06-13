@@ -5,6 +5,16 @@ import { Card } from "@/components/Card";
 import { useJobAnalysis } from "@/hooks/useJobAnalysis";
 import { useJobHistory } from "@/hooks/useJobHistory";
 import type { AiProvider, AiConfig } from "@/lib/analyze";
+import type { ApplicationStatus } from "@/lib/storage";
+
+const STATUS_CONFIG: Record<ApplicationStatus, { label: string; color: string }> = {
+  prepping: { label: "Prepping", color: "bg-slate-500/20 text-slate-300 border-slate-500/30" },
+  applied: { label: "Applied", color: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
+  "phone-screen": { label: "Phone Screen", color: "bg-amber-500/20 text-amber-300 border-amber-500/30" },
+  onsite: { label: "Onsite", color: "bg-purple-500/20 text-purple-300 border-purple-500/30" },
+  offer: { label: "Offer", color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" },
+  rejected: { label: "Rejected", color: "bg-red-500/20 text-red-300 border-red-500/30" },
+};
 
 const DEFAULT_CONFIG: AiConfig = {
   provider: "google",
@@ -29,11 +39,17 @@ export default function Home() {
   const [inputMode, setInputMode] = useState<"url" | "text">("url");
   const [jobUrl, setJobUrl] = useState("");
   const [jobText, setJobText] = useState("");
+  const [candidateSkills, setCandidateSkills] = useState("");
+  const [showGapInput, setShowGapInput] = useState(false);
   const [checkedSkills, setCheckedSkills] = useState<Record<string, boolean>>({});
   const [expandedResources, setExpandedResources] = useState<Record<string, boolean>>({});
+  const [coverLetter, setCoverLetter] = useState<string | null>(null);
+  const [coverLetterLoading, setCoverLetterLoading] = useState(false);
+  const [coverLetterError, setCoverLetterError] = useState<string | null>(null);
+  const [candidateName, setCandidateName] = useState("");
 
   const { result, loading, error, analyze, restore } = useJobAnalysis();
-  const { entries: historyEntries, addEntry: addHistoryEntry, removeEntry: removeHistoryEntry } = useJobHistory();
+  const { entries: historyEntries, addEntry: addHistoryEntry, removeEntry: removeHistoryEntry, updateStatus } = useJobHistory();
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
@@ -41,6 +57,35 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem("job-prep-ai-config", JSON.stringify(aiConfig));
   }, [aiConfig]);
+
+  /* ── keyboard shortcuts ── */
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
+
+      if (e.key === "Escape") {
+        if (pendingDeleteId) {
+          setPendingDeleteId(null);
+        } else if (isHistoryOpen) {
+          setIsHistoryOpen(false);
+        } else if (isSettingsOpen) {
+          setIsSettingsOpen(false);
+        }
+      }
+
+      if (e.key === "Enter" && !e.shiftKey && !isInput) {
+        const form = document.querySelector("form");
+        if (form) {
+          e.preventDefault();
+          form.requestSubmit();
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isSettingsOpen, isHistoryOpen, pendingDeleteId]);
 
   /* ── derived ── */
   const requiredSkills = useMemo(
@@ -87,8 +132,8 @@ export default function Home() {
 
     const input =
       inputMode === "url"
-        ? { url: jobUrl.trim() }
-        : { text: jobText.trim() };
+        ? { url: jobUrl.trim(), candidateSkills: showGapInput ? candidateSkills.trim() : undefined }
+        : { text: jobText.trim(), candidateSkills: showGapInput ? candidateSkills.trim() : undefined };
 
     const analysisResult = await analyze(input, aiConfig);
 
@@ -330,6 +375,30 @@ export default function Home() {
           </div>
 
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
+            {/* Gap analysis toggle */}
+            <button
+              type="button"
+              onClick={() => setShowGapInput(!showGapInput)}
+              className={`self-start flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                showGapInput
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                  : "bg-slate-950 text-slate-400 border border-slate-700 hover:text-slate-200"
+              }`}
+            >
+              {showGapInput ? "✓ Gap Analysis" : "+ Gap Analysis"}
+            </button>
+
+            {showGapInput && (
+              <textarea
+                id="input-candidate-skills"
+                className="min-h-[100px] w-full rounded-xl border border-emerald-500/30 bg-slate-950 px-4 py-3 text-sm leading-relaxed outline-none ring-emerald-400 placeholder:text-slate-500 focus:ring-2"
+                placeholder="Paste your skills or CV summary. E.g. Java/Spring Boot 5 years, React basics, PostgreSQL, Docker, no Kubernetes experience..."
+                value={candidateSkills}
+                onChange={(e) => setCandidateSkills(e.target.value)}
+                aria-label="Your skills for gap analysis"
+              />
+            )}
+
             {inputMode === "url" ? (
               <input
                 id="input-url"
@@ -413,6 +482,89 @@ export default function Home() {
 
         {/* ── Results ── */}
         {result && result.jobTitle && (
+          <>
+          <section id="results-actions" className="flex flex-wrap items-center gap-3">
+            <button
+              id="btn-cover-letter"
+              type="button"
+              disabled={coverLetterLoading}
+              onClick={async () => {
+                setCoverLetterLoading(true);
+                setCoverLetterError(null);
+                try {
+                  const res = await fetch("/api/generate-cover-letter", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      jobAnalysis: result,
+                      candidateSkills: showGapInput ? candidateSkills : undefined,
+                      candidateName: candidateName || undefined,
+                      aiConfig,
+                    }),
+                  });
+                  const data = (await res.json()) as { coverLetter?: string; error?: string };
+                  if (!res.ok || data.error) {
+                    setCoverLetterError(data.error ?? "Failed to generate cover letter");
+                  } else if (data.coverLetter) {
+                    setCoverLetter(data.coverLetter);
+                  }
+                } catch {
+                  setCoverLetterError("Network error. Check your API key and try again.");
+                } finally {
+                  setCoverLetterLoading(false);
+                }
+              }}
+              className="flex items-center gap-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/30 disabled:opacity-50"
+            >
+              {coverLetterLoading ? (
+                <>
+                  <svg className="size-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                  Generating...
+                </>
+              ) : coverLetter ? (
+                "📄 Regenerate Cover Letter"
+              ) : (
+                "📄 Generate Cover Letter"
+              )}
+            </button>
+            {coverLetterLoading && (
+              <input
+                type="text"
+                value={candidateName}
+                onChange={(e) => setCandidateName(e.target.value)}
+                placeholder="Your name (optional)"
+                className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 outline-none placeholder:text-slate-500"
+                aria-label="Your name for cover letter"
+              />
+            )}
+            {coverLetterError && (
+              <p className="text-xs text-red-400">{coverLetterError}</p>
+            )}
+          </section>
+
+          {coverLetter && (
+            <Card id="card-cover-letter" delay={0} className="md:col-span-2 border-emerald-500/20 bg-slate-950/80">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-semibold text-emerald-300">
+                  Cover Letter
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => { navigator.clipboard.writeText(coverLetter); }}
+                  className="rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-300 transition hover:bg-slate-700"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-300">
+                {coverLetter}
+              </pre>
+            </Card>
+          )}
+
           <section id="results-section" className="grid gap-5 md:grid-cols-2">
             {/* 1 ── Role Overview */}
             <Card id="card-role-overview" delay={0}>
@@ -624,7 +776,82 @@ export default function Home() {
               </Card>
             )}
 
-            {/* 9 ── Learning Resources (full width) */}
+            {/* 9 ── Gap Analysis (conditional) */}
+            {result.gapAnalysis && (
+              <Card id="card-gap-analysis" delay={600} className="md:col-span-2 border-emerald-500/30 bg-emerald-500/5">
+                <h2 className="text-lg font-semibold text-emerald-300">
+                  Gap Analysis
+                </h2>
+                <p className="mt-2 text-sm text-slate-300">
+                  {result.gapAnalysis.summary}
+                </p>
+
+                {result.gapAnalysis.strongMatches && result.gapAnalysis.strongMatches.length > 0 && (
+                  <div className="mt-4">
+                    <h3 className="text-sm font-semibold text-emerald-400">
+                      Strong Matches
+                    </h3>
+                    <ul className="mt-2 space-y-2">
+                      {result.gapAnalysis.strongMatches.map((m, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm">
+                          <span className="mt-1 text-emerald-400">✓</span>
+                          <div>
+                            <span className="font-medium text-slate-100">{m.skill}</span>
+                            <span className="text-slate-400"> — {m.evidence}</span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {result.gapAnalysis.partialMatches && result.gapAnalysis.partialMatches.length > 0 && (
+                  <div className="mt-4">
+                    <h3 className="text-sm font-semibold text-amber-400">
+                      Partial Matches
+                    </h3>
+                    <ul className="mt-2 space-y-2">
+                      {result.gapAnalysis.partialMatches.map((m, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm">
+                          <span className="mt-1 text-amber-400">~</span>
+                          <div>
+                            <span className="font-medium text-slate-100">{m.skill}</span>
+                            <span className="text-slate-400"> — {m.gap}</span>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              Bridge: {m.bridging}
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {result.gapAnalysis.gaps && result.gapAnalysis.gaps.length > 0 && (
+                  <div className="mt-4">
+                    <h3 className="text-sm font-semibold text-red-400">
+                      Gaps
+                    </h3>
+                    <ul className="mt-2 space-y-2">
+                      {result.gapAnalysis.gaps.map((m, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm">
+                          <span className="mt-1 text-red-400">✗</span>
+                          <div>
+                            <span className="font-medium text-slate-100">{m.skill}</span>
+                            <span className="text-slate-400"> — {m.impact}</span>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              Action: {m.action}
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </Card>
+            )}
+
+            {/* 10 ── Learning Resources (full width) */}
             <Card
               id="card-learning-resources"
               delay={640}
@@ -724,7 +951,7 @@ export default function Home() {
               </div>
             </Card>
 
-            {/* 10 ── Preparation Roadmap (full width) */}
+            {/* 11 ── Preparation Roadmap (full width) */}
             <Card
               id="card-preparation-roadmap"
               delay={720}
@@ -758,6 +985,7 @@ export default function Home() {
               </div>
             </Card>
           </section>
+          </>
         )}
 
         {/* ── History Panel ── */}
@@ -797,6 +1025,20 @@ export default function Home() {
                         <p className="text-[10px] text-slate-500">
                           {new Date(entry.timestamp).toLocaleString()}
                         </p>
+                        <select
+                          value={entry.status || "prepping"}
+                          onChange={(e) => updateStatus(entry.id, e.target.value as ApplicationStatus)}
+                          className={`mt-1 rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider outline-none cursor-pointer ${
+                            STATUS_CONFIG[entry.status || "prepping"]?.color ?? STATUS_CONFIG.prepping.color
+                          }`}
+                          aria-label="Application status"
+                        >
+                          {Object.entries(STATUS_CONFIG).map(([value, { label }]) => (
+                            <option key={value} value={value} className="bg-slate-900 text-slate-300">
+                              {label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <button
                         onClick={() => {
