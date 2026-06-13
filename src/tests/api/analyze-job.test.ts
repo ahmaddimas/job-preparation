@@ -84,7 +84,6 @@ describe("POST /api/analyze-job", () => {
     const mockStream = {
       partialObjectStream: createStream(),
     };
-    };
     vi.mocked(analyzeWithAI).mockResolvedValue(mockStream as never);
 
     const { POST } = await import("@/app/api/analyze-job/route");
