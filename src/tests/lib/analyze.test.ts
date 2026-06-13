@@ -72,13 +72,10 @@ describe("analyzeWithAI", () => {
     expect(callArgs.prompt).toContain(jobText);
   });
 
-  it("warns and falls back to Google for unknown provider", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("throws for unknown provider instead of falling back", async () => {
     const { analyzeWithAI } = await import("@/lib/analyze");
     const config = { provider: "unknown" as never, model: "x", apiKey: "key" };
-    await analyzeWithAI("job text", config);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Unknown provider"));
-    expect(mockStreamObject).toHaveBeenCalled();
-    warnSpy.mockRestore();
+    await expect(analyzeWithAI("job text", config)).rejects.toThrow("Unknown AI provider");
+    expect(mockStreamObject).not.toHaveBeenCalled();
   });
 });

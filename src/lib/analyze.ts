@@ -61,16 +61,26 @@ const providerStrategies: Record<AiProvider, ModelFactory> = {
 };
 
 /**
+ * Resolve an AiConfig to a LanguageModel instance.
+ * Throws on unknown providers instead of silently falling back.
+ */
+async function getModel(config: AiConfig): Promise<LanguageModel> {
+  const strategy = providerStrategies[config.provider];
+  if (!strategy) {
+    throw new Error(
+      `Unknown AI provider "${config.provider}". Supported providers: ${Object.keys(providerStrategies).join(", ")}.`
+    );
+  }
+  return strategy(config.apiKey, config.model);
+}
+
+/**
  * Analyze a job posting using AI and return a streamable object result.
  * Uses streamObject for compatibility with free/rate-limited models that
  * may not support strict single-shot structured output.
  */
 export async function analyzeWithAI(jobText: string, config: AiConfig) {
-  const strategy = providerStrategies[config.provider];
-  if (!strategy) {
-    console.warn(`[analyze] Unknown provider "${config.provider}", falling back to Google`);
-  }
-  const aiModel = await (strategy ?? providerStrategies.google)(config.apiKey, config.model);
+  const aiModel = await getModel(config);
 
   return streamObject({
     model: aiModel,
