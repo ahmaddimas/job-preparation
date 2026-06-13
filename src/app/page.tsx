@@ -33,6 +33,10 @@ export default function Home() {
   const [showGapInput, setShowGapInput] = useState(false);
   const [checkedSkills, setCheckedSkills] = useState<Record<string, boolean>>({});
   const [expandedResources, setExpandedResources] = useState<Record<string, boolean>>({});
+  const [coverLetter, setCoverLetter] = useState<string | null>(null);
+  const [coverLetterLoading, setCoverLetterLoading] = useState(false);
+  const [coverLetterError, setCoverLetterError] = useState<string | null>(null);
+  const [candidateName, setCandidateName] = useState("");
 
   const { result, loading, error, analyze, restore } = useJobAnalysis();
   const { entries: historyEntries, addEntry: addHistoryEntry, removeEntry: removeHistoryEntry } = useJobHistory();
@@ -439,6 +443,89 @@ export default function Home() {
 
         {/* ── Results ── */}
         {result && result.jobTitle && (
+          <>
+          <section id="results-actions" className="flex flex-wrap items-center gap-3">
+            <button
+              id="btn-cover-letter"
+              type="button"
+              disabled={coverLetterLoading}
+              onClick={async () => {
+                setCoverLetterLoading(true);
+                setCoverLetterError(null);
+                try {
+                  const res = await fetch("/api/generate-cover-letter", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      jobAnalysis: result,
+                      candidateSkills: showGapInput ? candidateSkills : undefined,
+                      candidateName: candidateName || undefined,
+                      aiConfig,
+                    }),
+                  });
+                  const data = (await res.json()) as { coverLetter?: string; error?: string };
+                  if (!res.ok || data.error) {
+                    setCoverLetterError(data.error ?? "Failed to generate cover letter");
+                  } else if (data.coverLetter) {
+                    setCoverLetter(data.coverLetter);
+                  }
+                } catch {
+                  setCoverLetterError("Network error. Check your API key and try again.");
+                } finally {
+                  setCoverLetterLoading(false);
+                }
+              }}
+              className="flex items-center gap-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/30 disabled:opacity-50"
+            >
+              {coverLetterLoading ? (
+                <>
+                  <svg className="size-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                  Generating...
+                </>
+              ) : coverLetter ? (
+                "📄 Regenerate Cover Letter"
+              ) : (
+                "📄 Generate Cover Letter"
+              )}
+            </button>
+            {coverLetterLoading && (
+              <input
+                type="text"
+                value={candidateName}
+                onChange={(e) => setCandidateName(e.target.value)}
+                placeholder="Your name (optional)"
+                className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 outline-none placeholder:text-slate-500"
+                aria-label="Your name for cover letter"
+              />
+            )}
+            {coverLetterError && (
+              <p className="text-xs text-red-400">{coverLetterError}</p>
+            )}
+          </section>
+
+          {coverLetter && (
+            <Card id="card-cover-letter" delay={0} className="md:col-span-2 border-emerald-500/20 bg-slate-950/80">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-semibold text-emerald-300">
+                  Cover Letter
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => { navigator.clipboard.writeText(coverLetter); }}
+                  className="rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-medium text-slate-300 transition hover:bg-slate-700"
+                >
+                  Copy
+                </button>
+              </div>
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-300">
+                {coverLetter}
+              </pre>
+            </Card>
+          )}
+
           <section id="results-section" className="grid gap-5 md:grid-cols-2">
             {/* 1 ── Role Overview */}
             <Card id="card-role-overview" delay={0}>
@@ -859,6 +946,7 @@ export default function Home() {
               </div>
             </Card>
           </section>
+          </>
         )}
 
         {/* ── History Panel ── */}

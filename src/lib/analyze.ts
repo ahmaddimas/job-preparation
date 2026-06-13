@@ -1,4 +1,4 @@
-import { streamObject } from "ai";
+import { streamObject, streamText } from "ai";
 import type { LanguageModel } from "ai";
 
 import { jobAnalysisSchema } from "./schema";
@@ -100,5 +100,20 @@ export async function analyzeWithAI(
     system: SYSTEM_PROMPT,
     prompt,
     temperature: 0.1,
+  });
+}
+
+/**
+ * Generate free-form text using AI for tasks like cover letters.
+ */
+export async function generateWithAI(prompt: string, config: AiConfig) {
+  const aiModel = await getModel(config);
+
+  return streamText({
+    model: aiModel,
+    system:
+      "You are a professional career coach and cover letter writer. Be direct, confident, and specific. No fluff.",
+    prompt,
+    temperature: 0.3,
   });
 }
