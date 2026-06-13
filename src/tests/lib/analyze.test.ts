@@ -24,6 +24,9 @@ vi.mock("@ai-sdk/groq", () => ({
 vi.mock("@openrouter/ai-sdk-provider", () => ({
   createOpenRouter: () => mockCreate,
 }));
+vi.mock("@ai-sdk/openai-compatible", () => ({
+  createOpenAICompatible: () => mockCreate,
+}));
 
 const mockStreamResult = {
   partialObjectStream: (async function* () {})(),
@@ -38,7 +41,7 @@ describe("analyzeWithAI", () => {
 
   it("calls streamObject and returns a stream result", async () => {
     const { analyzeWithAI } = await import("@/lib/analyze");
-    const config: AiConfig = { provider: "google", model: "gemini-2.5-flash", apiKey: "test-key" };
+    const config: AiConfig = { provider: "google", model: "gemini-2.5-flash", apiKeys: { google: "test-key" } };
 
     const result = await analyzeWithAI("some job text", config);
 
@@ -54,7 +57,7 @@ describe("analyzeWithAI", () => {
     ["google" as const],
   ])("routes provider '%s' correctly", async (provider) => {
     const { analyzeWithAI } = await import("@/lib/analyze");
-    const config: AiConfig = { provider, model: "test-model", apiKey: "key" };
+    const config: AiConfig = { provider, model: "test-model", apiKeys: { [provider]: "key" } };
 
     await analyzeWithAI("job text", config);
 
@@ -63,7 +66,7 @@ describe("analyzeWithAI", () => {
 
   it("passes the job text in the prompt", async () => {
     const { analyzeWithAI } = await import("@/lib/analyze");
-    const config: AiConfig = { provider: "google", model: "gemini-2.5-flash", apiKey: "key" };
+    const config: AiConfig = { provider: "google", model: "gemini-2.5-flash", apiKeys: { google: "key" } };
     const jobText = "We are looking for a senior React developer";
 
     await analyzeWithAI(jobText, config);
@@ -74,7 +77,7 @@ describe("analyzeWithAI", () => {
 
   it("throws for unknown provider instead of falling back", async () => {
     const { analyzeWithAI } = await import("@/lib/analyze");
-    const config = { provider: "unknown" as never, model: "x", apiKey: "key" };
+    const config = { provider: "unknown" as never, model: "x", apiKeys: {} };
     await expect(analyzeWithAI("job text", config)).rejects.toThrow("Unknown AI provider");
     expect(mockStreamObject).not.toHaveBeenCalled();
   });

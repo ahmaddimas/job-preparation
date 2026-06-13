@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/analyze", () => ({
   analyzeWithAI: vi.fn(),
+  getApiKey: vi.fn((config: Record<string, unknown>) => (config.apiKeys as Record<string, string>)?.[config.provider as string] ?? ""),
 }));
 
 vi.mock("@/lib/html-cleaner", () => ({
@@ -33,7 +34,7 @@ const mockJobAnalysis = {
   preparationRoadmap: [],
 };
 
-const validConfig = { provider: "google", model: "gemini-2.5-flash", apiKey: "test-api-key" };
+const validConfig = { provider: "google" as const, model: "gemini-2.5-flash", apiKeys: { google: "test-api-key" } };
 
 function buildRequest(body: object) {
   return new Request("http://localhost/api/analyze-job", {
@@ -51,7 +52,7 @@ describe("POST /api/analyze-job", () => {
 
   it("returns 401 when apiKey is missing", async () => {
     const { POST } = await import("@/app/api/analyze-job/route");
-    const req = buildRequest({ text: "some job", aiConfig: { provider: "google", model: "x", apiKey: "" } });
+    const req = buildRequest({ text: "some job", aiConfig: { provider: "google", model: "x", apiKeys: { google: "" } } });
     const res = await POST(req);
     expect(res.status).toBe(401);
     const body = await res.json() as { error: string };

@@ -104,7 +104,7 @@ describe("Home", () => {
     const Home = (await import("@/app/page")).default;
     render(<Home />);
     await userEvent.click(screen.getByText("⚙️ Settings"));
-    const select = screen.getByRole("combobox");
+    const select = screen.getAllByRole("combobox")[0];
     await userEvent.selectOptions(select, "openai");
     expect((select as HTMLSelectElement).value).toBe("openai");
   });
@@ -113,10 +113,11 @@ describe("Home", () => {
     const Home = (await import("@/app/page")).default;
     render(<Home />);
     await userEvent.click(screen.getByText("⚙️ Settings"));
-    const modelInput = screen.getByPlaceholderText("e.g. gemini-2.5-flash, gpt-4o-mini");
+    await userEvent.selectOptions(screen.getAllByRole("combobox")[0], "openrouter");
+    const modelInput = screen.getByPlaceholderText("e.g. google/gemini-2.5-flash");
     await userEvent.clear(modelInput);
-    await userEvent.type(modelInput, "gpt-4o");
-    expect(modelInput).toHaveValue("gpt-4o");
+    await userEvent.type(modelInput, "openai/gpt-4o");
+    expect(modelInput).toHaveValue("openai/gpt-4o");
   });
 
   it("changes API key input in settings modal", async () => {
@@ -170,7 +171,7 @@ describe("Home", () => {
 
   it("does not submit empty form", async () => {
     localStorage.setItem("job-prep-ai-config", JSON.stringify({
-      provider: "google", model: "gemini-2.5-flash", apiKey: "test-key",
+      provider: "google", model: "gemini-2.5-flash", apiKeys: { google: "test-key" },
     }));
     const mockAnalyze = vi.fn();
     mockUseJobAnalysis.mockReturnValue({
@@ -199,7 +200,7 @@ describe("Home", () => {
 
   it("calls analyze when form is submitted with text", async () => {
     localStorage.setItem("job-prep-ai-config", JSON.stringify({
-      provider: "google", model: "gemini-2.5-flash", apiKey: "test-key",
+      provider: "google", model: "gemini-2.5-flash", apiKeys: { google: "test-key" },
     }));
     const mockAnalyze = vi.fn().mockResolvedValue({ jobTitle: "Engineer" });
     mockUseJobAnalysis.mockReturnValue({
@@ -217,7 +218,7 @@ describe("Home", () => {
 
   it("calls analyze with URL input mode", async () => {
     localStorage.setItem("job-prep-ai-config", JSON.stringify({
-      provider: "google", model: "gemini-2.5-flash", apiKey: "test-key",
+      provider: "google", model: "gemini-2.5-flash", apiKeys: { google: "test-key" },
     }));
     const mockAnalyze = vi.fn().mockResolvedValue({ jobTitle: "Engineer" });
     mockUseJobAnalysis.mockReturnValue({
@@ -549,7 +550,7 @@ describe("Home", () => {
 
   it("calls addHistoryEntry after successful analysis", async () => {
     localStorage.setItem("job-prep-ai-config", JSON.stringify({
-      provider: "google", model: "gemini-2.5-flash", apiKey: "test-key",
+      provider: "google", model: "gemini-2.5-flash", apiKeys: { google: "test-key" },
     }));
     const mockAddEntry = vi.fn();
     mockUseJobHistory.mockReturnValue({
@@ -576,13 +577,13 @@ describe("Home", () => {
 
   it("preserves ai config from localStorage", async () => {
     localStorage.setItem("job-prep-ai-config", JSON.stringify({
-      provider: "openai", model: "gpt-4o", apiKey: "saved-key",
+      provider: "openai", model: "gpt-4o", apiKeys: { openai: "saved-key" },
     }));
     const Home = (await import("@/app/page")).default;
     render(<Home />);
     await userEvent.click(screen.getByText("⚙️ Settings"));
     expect(screen.getByPlaceholderText("Enter your API key")).toHaveValue("saved-key");
-    const select = screen.getByRole("combobox");
+    const select = screen.getAllByRole("combobox")[0];
     expect((select as HTMLSelectElement).value).toBe("openai");
   });
 
@@ -592,7 +593,7 @@ describe("Home", () => {
     render(<Home />);
     await userEvent.click(screen.getByText("⚙️ Settings"));
     expect(screen.getByPlaceholderText("Enter your API key")).toHaveValue("");
-    const select = screen.getByRole("combobox");
+    const select = screen.getAllByRole("combobox")[0];
     expect((select as HTMLSelectElement).value).toBe("google");
   });
 });

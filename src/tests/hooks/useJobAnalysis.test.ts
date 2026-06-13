@@ -3,7 +3,7 @@ import { renderHook, act } from "@testing-library/react";
 import { useJobAnalysis } from "@/hooks/useJobAnalysis";
 import type { AiConfig } from "@/lib/analyze";
 
-const validConfig: AiConfig = { provider: "google", model: "gemini-2.5-flash", apiKey: "test-key" };
+const validConfig: AiConfig = { provider: "google", model: "gemini-2.5-flash", apiKeys: { google: "test-key" } };
 
 const fullResult = {
   jobTitle: "Engineer",
