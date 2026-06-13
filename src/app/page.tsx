@@ -58,6 +58,35 @@ export default function Home() {
     localStorage.setItem("job-prep-ai-config", JSON.stringify(aiConfig));
   }, [aiConfig]);
 
+  /* ── keyboard shortcuts ── */
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
+
+      if (e.key === "Escape") {
+        if (pendingDeleteId) {
+          setPendingDeleteId(null);
+        } else if (isHistoryOpen) {
+          setIsHistoryOpen(false);
+        } else if (isSettingsOpen) {
+          setIsSettingsOpen(false);
+        }
+      }
+
+      if (e.key === "Enter" && !e.shiftKey && !isInput) {
+        const form = document.querySelector("form");
+        if (form) {
+          e.preventDefault();
+          form.requestSubmit();
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isSettingsOpen, isHistoryOpen, pendingDeleteId]);
+
   /* ── derived ── */
   const requiredSkills = useMemo(
     () => (result?.skills ?? []).filter((s) => s.category === "required"),
