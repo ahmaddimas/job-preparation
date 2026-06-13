@@ -5,6 +5,16 @@ import { Card } from "@/components/Card";
 import { useJobAnalysis } from "@/hooks/useJobAnalysis";
 import { useJobHistory } from "@/hooks/useJobHistory";
 import type { AiProvider, AiConfig } from "@/lib/analyze";
+import type { ApplicationStatus } from "@/lib/storage";
+
+const STATUS_CONFIG: Record<ApplicationStatus, { label: string; color: string }> = {
+  prepping: { label: "Prepping", color: "bg-slate-500/20 text-slate-300 border-slate-500/30" },
+  applied: { label: "Applied", color: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
+  "phone-screen": { label: "Phone Screen", color: "bg-amber-500/20 text-amber-300 border-amber-500/30" },
+  onsite: { label: "Onsite", color: "bg-purple-500/20 text-purple-300 border-purple-500/30" },
+  offer: { label: "Offer", color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" },
+  rejected: { label: "Rejected", color: "bg-red-500/20 text-red-300 border-red-500/30" },
+};
 
 const DEFAULT_CONFIG: AiConfig = {
   provider: "google",
@@ -39,7 +49,7 @@ export default function Home() {
   const [candidateName, setCandidateName] = useState("");
 
   const { result, loading, error, analyze, restore } = useJobAnalysis();
-  const { entries: historyEntries, addEntry: addHistoryEntry, removeEntry: removeHistoryEntry } = useJobHistory();
+  const { entries: historyEntries, addEntry: addHistoryEntry, removeEntry: removeHistoryEntry, updateStatus } = useJobHistory();
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
@@ -986,6 +996,20 @@ export default function Home() {
                         <p className="text-[10px] text-slate-500">
                           {new Date(entry.timestamp).toLocaleString()}
                         </p>
+                        <select
+                          value={entry.status || "prepping"}
+                          onChange={(e) => updateStatus(entry.id, e.target.value as ApplicationStatus)}
+                          className={`mt-1 rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider outline-none cursor-pointer ${
+                            STATUS_CONFIG[entry.status || "prepping"]?.color ?? STATUS_CONFIG.prepping.color
+                          }`}
+                          aria-label="Application status"
+                        >
+                          {Object.entries(STATUS_CONFIG).map(([value, { label }]) => (
+                            <option key={value} value={value} className="bg-slate-900 text-slate-300">
+                              {label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <button
                         onClick={() => {
